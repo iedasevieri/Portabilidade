@@ -103,7 +103,7 @@ col_g1, col_g2 = st.columns(2)
 
 with col_g1:
     st.subheader('Status das Ações')
-    contagem = df['Status'].value_counts().reset_index()
+    contagem = df_filtrado['Status'].value_counts().reset_index()
     contagem.columns = ['Status', 'Qtde']
     cores = {'Concluído': '#4CAF50', 'Atrasado': '#CC0000', 'Em andamento': '#FF9800'}
     fig1 = px.pie(contagem, values='Qtde', names='Status',
@@ -114,7 +114,7 @@ with col_g1:
 
 with col_g2:
     st.subheader('Top 10 Responsáveis por Ações')
-    top_resp = df.groupby('Responsável').size().sort_values(ascending=True).tail(10)
+    top_resp = df_filtrado.groupby('Responsável').size().sort_values(ascending=True).tail(10)
     fig2 = px.bar(top_resp, orientation='h',
                   color_discrete_sequence=['#CC0000'])
     fig2.update_layout(margin=dict(t=10, b=10),
