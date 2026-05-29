@@ -7,7 +7,7 @@ from openpyxl.styles import PatternFill
 import os
 
 ARQUIVO = 'plano_acao.xlsx'
-ABA = '🗂️ Base'
+ABA = 'Base'
 
 st.set_page_config(page_title='Plano de Ação — Portabilidade', page_icon='📋', layout='wide')
 
