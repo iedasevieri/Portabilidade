@@ -6,8 +6,8 @@ from openpyxl import load_workbook
 from openpyxl.styles import PatternFill
 import os
 
-ARQUIVO = 'Plano_de_Ação.xlsx'
-ABA = '🗂 Base'
+ARQUIVO = 'plano_de_acao.xlsx'
+ABA = '🗂️ Base'
 
 st.set_page_config(page_title='Plano de Ação — Portabilidade', page_icon='📋', layout='wide')
 
@@ -235,7 +235,7 @@ if len(atrasadas_df) > 0:
     st.subheader('🚨 Ações Atrasadas')
     for _, row in atrasadas_df.iterrows():
         st.error(
-            f"**#{row['Número']} | {row['Responsável']}** — "
+            f"*#{row['Número']} | {row['Responsável']}* — "
             f"{str(row['Problema Identificado'])[:80]}... "
-            f"| Prazo: {row['Prazo_fmt']} | **{int(row['Dias Atraso'])} dias de atraso**"
+            f"| Prazo: {row['Prazo_fmt']} | *{int(row['Dias Atraso'])} dias de atraso*"
         )
