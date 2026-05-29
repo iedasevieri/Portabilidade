@@ -223,7 +223,7 @@ tabela = df_filtrado[[
 ]].rename(columns={'Prazo_fmt':'Prazo','Data Finalização_fmt':'Finalizado em'})
 
 st.dataframe(
-    tabela.style.applymap(colorir_status, subset=['Status']),
+    tabela.style.map(colorir_status, subset=['Status']),
     use_container_width=True, hide_index=True, height=400
 )
 
