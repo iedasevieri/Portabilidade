@@ -1,18 +1,24 @@
 import streamlit as st
 from supabase import create_client
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import pandas as pd
+from io import BytesIO
 
 SUPABASE_URL = "https://yjvhfhodhlxgprpxelxs.supabase.co"
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 
+BRASILIA = timezone(timedelta(hours=-3))
+
+def agora_brasilia():
+    return datetime.now(BRASILIA)
+
 RESPONSAVEIS = sorted([
-    "Aline", "Borges", "Cícera", "Cícera e Galvão", "Cristiane", "Dani Vieira",
-    "Daniela", "Diego", "Diego/Antonio", "Ednalva", "Fauzi",
-    "Galvão", "Galvão, Roldão, Diego e Cícera", "Guilherme Carrasco",
-    "Hebert", "Ieda", "Janaina Cruz", "Janaina/ OGS", "Marketing",
-    "Natalia", "Rogerio Galvão", "Roldão", "Tânia", "Tânia e Dani Vieira",
-    "TI", "Viviane", "Viviane e Natalia", "Vivi"
+    "Antonio", "Aline", "Andreia", "Borges", "Cícera", "Cristiane",
+    "Dani Vieira", "Diego", "Diego/Antonio", "Ednalva", "Eunice",
+    "Fauzi", "Flávia", "Galvão", "Guilherme Carrasco", "Hebert",
+    "Ieda", "Izabella", "Janaina Cruz", "Janaina/OGS", "Kleiton",
+    "Lia Mara", "Luis Fernando", "Marketing", "Natalia", "Núbia",
+    "Rogerio Galvão", "Roldão", "Stephanie", "Tânia", "TI", "Viviane"
 ])
 
 STATUS_OPCOES = ["Em andamento", "Concluído", "Atrasado", "Cancelado"]
@@ -20,9 +26,6 @@ STATUS_ICONS = {"Concluído": "✅", "Atrasado": "⚠️", "Em andamento": "🔄
 
 st.set_page_config(page_title="Plano de Ação | Portabilidade", layout="wide")
 
-# ============================
-# CSS
-# ============================
 st.markdown("""
 <style>
 .header-box {
@@ -31,22 +34,11 @@ st.markdown("""
     border-radius: 8px;
     margin-bottom: 24px;
 }
-.header-box h1 {
-    color: white;
-    margin: 0;
-    font-size: 2rem;
-}
-.header-box p {
-    color: rgba(255,255,255,0.85);
-    margin: 6px 0 0 0;
-    font-size: 0.9rem;
-}
+.header-box h1 { color: white; margin: 0; font-size: 2rem; }
+.header-box p { color: rgba(255,255,255,0.85); margin: 6px 0 0 0; font-size: 0.9rem; }
 </style>
 """, unsafe_allow_html=True)
 
-# ============================
-# SUPABASE
-# ============================
 @st.cache_resource
 def get_supabase():
     return create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -56,19 +48,48 @@ def carregar_dados():
     result = sb.table("plano_acao").select("*").order("numero").execute()
     return pd.DataFrame(result.data)
 
-def atualizar_registro(id_, status, comentario, responsavel):
+def carregar_historico(acao_id):
     sb = get_supabase()
-    agora = datetime.now().strftime("%d/%m/%Y %H:%M")
-    sb.table("plano_acao").update({
+    result = sb.table("plano_acao_historico").select("*").eq("acao_id", acao_id).order("atualizado_em", desc=True).execute()
+    return pd.DataFrame(result.data)
+
+def salvar_historico(acao_id, numero, status_anterior, status_novo, comentario, novo_prazo, responsavel):
+    sb = get_supabase()
+    sb.table("plano_acao_historico").insert({
+        "acao_id": int(acao_id),
+        "numero": int(numero),
+        "status_anterior": status_anterior,
+        "status_novo": status_novo,
+        "comentario": comentario,
+        "novo_prazo": novo_prazo,
+        "atualizado_por": responsavel,
+        "atualizado_em": agora_brasilia().isoformat(),
+    }).execute()
+
+def atualizar_registro(id_, status, comentario, responsavel, novo_prazo=None):
+    sb = get_supabase()
+    update = {
         "status": status,
         "comentario": comentario,
         "atualizado_por": responsavel,
-        "atualizado_em": datetime.now().isoformat(),
-    }).eq("id", id_).execute()
+        "atualizado_em": agora_brasilia().isoformat(),
+    }
+    if novo_prazo:
+        update["prazo"] = novo_prazo
+    sb.table("plano_acao").update(update).eq("id", id_).execute()
 
 def cadastrar_acao(dados):
     sb = get_supabase()
     sb.table("plano_acao").insert(dados).execute()
+
+def formatar_data(dt_str):
+    if not dt_str:
+        return ""
+    try:
+        dt = datetime.fromisoformat(str(dt_str))
+        return dt.strftime("%d/%m/%Y %H:%M")
+    except:
+        return str(dt_str)
 
 # ============================
 # SIDEBAR
@@ -78,16 +99,15 @@ with st.sidebar:
     usuario = st.selectbox("Seu nome", ["Selecione..."] + RESPONSAVEIS)
 
 # ============================
-# CARREGAR DADOS
+# DADOS
 # ============================
 df_all = carregar_dados()
-
 total = len(df_all)
 concluidas = len(df_all[df_all["status"] == "Concluído"])
 atrasadas = len(df_all[df_all["status"] == "Atrasado"])
 em_andamento = len(df_all[df_all["status"] == "Em andamento"])
 taxa = f"{round(concluidas / total * 100, 1)}%" if total > 0 else "0%"
-agora_str = datetime.now().strftime("%d/%m/%Y %H:%M")
+agora_str = agora_brasilia().strftime("%d/%m/%Y %H:%M")
 
 # ============================
 # HEADER
@@ -114,13 +134,12 @@ st.divider()
 # ============================
 # TABS
 # ============================
-aba_acoes, aba_nova = st.tabs(["📋 Ações", "➕ Nova Ação"])
+aba_acoes, aba_nova, aba_export = st.tabs(["📋 Ações", "➕ Nova Ação", "📥 Exportar"])
 
 # ============================
 # ABA AÇÕES
 # ============================
 with aba_acoes:
-    # Filtros
     col_f1, col_f2, col_f3 = st.columns(3)
     with col_f1:
         st.markdown("👤 **Filtrar por responsável**")
@@ -132,7 +151,6 @@ with aba_acoes:
         st.markdown("🔍 **Buscar por palavra-chave**")
         busca = st.text_input("", placeholder="Digite para buscar...", label_visibility="collapsed", key="busca")
 
-    # Aplicar filtros
     df = df_all.copy()
     if filtro_resp != "Todos":
         df = df[df["responsavel"].str.contains(filtro_resp, case=False, na=False)]
@@ -153,16 +171,8 @@ with aba_acoes:
         for _, row in df.iterrows():
             prazo_str = row.get('prazo') or '-'
             icon = STATUS_ICONS.get(row['status'], "")
-            
-            # Montar info de última atualização
-            ultima_atualizacao = ""
-            if row.get('atualizado_por') and row.get('atualizado_em'):
-                try:
-                    dt = datetime.fromisoformat(str(row['atualizado_em']))
-                    dt_str = dt.strftime("%d/%m/%Y %H:%M")
-                    ultima_atualizacao = f" · Atualizado por **{row['atualizado_por']}** em {dt_str}"
-                except:
-                    ultima_atualizacao = f" · Atualizado por **{row['atualizado_por']}**"
+            atualizado_por = row.get('atualizado_por') or ''
+            atualizado_em = formatar_data(row.get('atualizado_em'))
 
             with st.expander(f"#{row['numero']} — {row['responsavel']} | {icon} {row['status']} | Prazo: {prazo_str}"):
                 st.markdown(f"**Problema:**\n{row['problema_identificado']}")
@@ -172,9 +182,22 @@ with aba_acoes:
                     st.caption(f"📝 {row['observacao']}")
 
                 if row.get('comentario'):
-                    st.info(f"💬 **Comentário:** {row['comentario']}{ultima_atualizacao}")
-                elif ultima_atualizacao:
-                    st.caption(f"🕐{ultima_atualizacao}")
+                    info_str = f"💬 **Comentário:** {row['comentario']}"
+                    if atualizado_por and atualizado_em:
+                        info_str += f" · Atualizado por **{atualizado_por}** em {atualizado_em}"
+                    st.info(info_str)
+                elif atualizado_por and atualizado_em:
+                    st.caption(f"🕐 Atualizado por **{atualizado_por}** em {atualizado_em}")
+
+                # Histórico
+                hist = carregar_historico(row['id'])
+                if not hist.empty:
+                    with st.expander("📜 Ver histórico de alterações"):
+                        for _, h in hist.iterrows():
+                            dt_h = formatar_data(h.get('atualizado_em'))
+                            prazo_h = f" | Novo prazo: {h['novo_prazo']}" if h.get('novo_prazo') else ""
+                            coment_h = f" | Comentário: {h['comentario']}" if h.get('comentario') else ""
+                            st.markdown(f"- **{dt_h}** — {h.get('atualizado_por','')} mudou de *{h.get('status_anterior','')}* para *{h.get('status_novo','')}*{prazo_h}{coment_h}")
 
                 if usuario != "Selecione...":
                     col_s, col_c = st.columns([1, 2])
@@ -186,14 +209,36 @@ with aba_acoes:
                         )
                     with col_c:
                         comentario = st.text_input(
-                            "Comentário (opcional)",
-                            value=row.get("comentario") or "",
+                            "Comentário (opcional)" if novo_status != "Atrasado" else "Comentário (obrigatório para Atrasado) *",
+                            value="",
                             key=f"comentario_{row['id']}"
                         )
+
+                    # Novo prazo obrigatório se mudou para Em andamento e estava Atrasado
+                    novo_prazo = None
+                    mudando_prazo = (row['status'] == "Atrasado" and novo_status == "Em andamento")
+                    if mudando_prazo:
+                        st.warning("⚠️ Ação estava atrasada — informe o novo prazo.")
+                        novo_prazo = st.date_input("Novo prazo *", value=None, key=f"prazo_{row['id']}")
+
                     if st.button("💾 Salvar", key=f"salvar_{row['id']}"):
-                        atualizar_registro(row["id"], novo_status, comentario, usuario)
-                        st.success(f"✅ Salvo! {datetime.now().strftime('%d/%m/%Y %H:%M')}")
-                        st.rerun()
+                        # Validações
+                        if novo_status == "Atrasado" and not comentario.strip():
+                            st.error("Comentário obrigatório ao marcar como Atrasado.")
+                        elif mudando_prazo and not novo_prazo:
+                            st.error("Informe o novo prazo para reabrir a ação.")
+                        elif mudando_prazo and not comentario.strip():
+                            st.error("Comentário obrigatório ao alterar prazo.")
+                        else:
+                            prazo_salvar = novo_prazo.isoformat() if novo_prazo else None
+                            salvar_historico(
+                                row['id'], row['numero'],
+                                row['status'], novo_status,
+                                comentario, prazo_salvar, usuario
+                            )
+                            atualizar_registro(row['id'], novo_status, comentario, usuario, prazo_salvar)
+                            st.success(f"✅ Salvo em {agora_brasilia().strftime('%d/%m/%Y %H:%M')}")
+                            st.rerun()
                 else:
                     st.warning("Selecione seu nome na barra lateral para editar.")
 
@@ -221,7 +266,7 @@ with aba_nova:
                 dados = {
                     "numero": proximo_numero,
                     "origem": "Fórum de Portabilidade",
-                    "data_entrada": datetime.now().strftime("%Y-%m-%d"),
+                    "data_entrada": agora_brasilia().strftime("%Y-%m-%d"),
                     "problema_identificado": problema,
                     "plano_de_acao": plano,
                     "responsavel": responsavel_acao,
@@ -232,8 +277,46 @@ with aba_nova:
                     "observacao": observacao or None,
                     "comentario": None,
                     "atualizado_por": usuario,
-                    "atualizado_em": datetime.now().isoformat(),
+                    "atualizado_em": agora_brasilia().isoformat(),
                 }
                 cadastrar_acao(dados)
-                st.success(f"✅ Ação #{proximo_numero} cadastrada com sucesso!")
+                st.success(f"✅ Ação #{proximo_numero} cadastrada!")
                 st.rerun()
+
+# ============================
+# ABA EXPORTAR
+# ============================
+with aba_export:
+    st.subheader("📥 Exportar dados para Excel")
+    st.caption("Exporta todas as ações com status atual.")
+
+    df_export = df_all.copy()
+    df_export = df_export.rename(columns={
+        "numero": "Número",
+        "origem": "Origem",
+        "data_entrada": "Data Entrada",
+        "problema_identificado": "Problema Identificado",
+        "plano_de_acao": "Plano de Ação",
+        "responsavel": "Responsável",
+        "prazo": "Prazo",
+        "data_finalizacao": "Data Finalização",
+        "status": "Status",
+        "dias_atraso": "Dias Atraso",
+        "observacao": "Observação",
+        "comentario": "Último Comentário",
+        "atualizado_por": "Atualizado Por",
+        "atualizado_em": "Atualizado Em",
+    })
+    df_export = df_export.drop(columns=["id"], errors="ignore")
+
+    buffer = BytesIO()
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        df_export.to_excel(writer, index=False, sheet_name="Plano de Ação")
+    buffer.seek(0)
+
+    st.download_button(
+        label="⬇️ Baixar Excel",
+        data=buffer,
+        file_name=f"plano_acao_{agora_brasilia().strftime('%Y%m%d_%H%M')}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
