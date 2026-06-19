@@ -60,8 +60,8 @@ def salvar_historico(acao_id, numero, status_anterior, status_novo, comentario, 
         "numero": int(numero),
         "status_anterior": status_anterior,
         "status_novo": status_novo,
-        "comentario": comentario,
-        "novo_prazo": novo_prazo,
+        "comentario": comentario or None,
+        "novo_prazo": novo_prazo or None,
         "atualizado_por": responsavel,
         "atualizado_em": agora_brasilia().isoformat(),
     }).execute()
@@ -70,7 +70,7 @@ def atualizar_registro(id_, status, comentario, responsavel, novo_prazo=None):
     sb = get_supabase()
     update = {
         "status": status,
-        "comentario": comentario,
+        "comentario": comentario or None,
         "atualizado_por": responsavel,
         "atualizado_em": agora_brasilia().isoformat(),
     }
@@ -87,9 +87,21 @@ def formatar_data(dt_str):
         return ""
     try:
         dt = datetime.fromisoformat(str(dt_str))
-        return dt.strftime("%d/%m/%Y %H:%M")
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        dt_br = dt.astimezone(BRASILIA)
+        return dt_br.strftime("%d/%m/%Y %H:%M")
     except:
         return str(dt_str)
+
+def limpar(valor):
+    """Retorna None se valor for vazio, nan ou None"""
+    if valor is None:
+        return None
+    s = str(valor).strip()
+    if s.lower() in ('nan', 'none', ''):
+        return None
+    return s
 
 # ============================
 # SIDEBAR
@@ -169,20 +181,22 @@ with aba_acoes:
         st.info("Nenhuma ação encontrada.")
     else:
         for _, row in df.iterrows():
-            prazo_str = row.get('prazo') or '-'
+            prazo_str = limpar(row.get('prazo')) or '-'
             icon = STATUS_ICONS.get(row['status'], "")
-            atualizado_por = row.get('atualizado_por') or ''
+            atualizado_por = limpar(row.get('atualizado_por'))
             atualizado_em = formatar_data(row.get('atualizado_em'))
+            comentario_atual = limpar(row.get('comentario'))
+            observacao_atual = limpar(row.get('observacao'))
 
             with st.expander(f"#{row['numero']} — {row['responsavel']} | {icon} {row['status']} | Prazo: {prazo_str}"):
                 st.markdown(f"**Problema:**\n{row['problema_identificado']}")
                 st.markdown(f"**Plano de Ação:**\n{row['plano_de_acao']}")
 
-                if row.get('observacao'):
-                    st.caption(f"📝 {row['observacao']}")
+                if observacao_atual:
+                    st.caption(f"📝 {observacao_atual}")
 
-                if row.get('comentario'):
-                    info_str = f"💬 **Comentário:** {row['comentario']}"
+                if comentario_atual:
+                    info_str = f"💬 **Comentário:** {comentario_atual}"
                     if atualizado_por and atualizado_em:
                         info_str += f" · Atualizado por **{atualizado_por}** em {atualizado_em}"
                     st.info(info_str)
@@ -195,8 +209,8 @@ with aba_acoes:
                     with st.expander("📜 Ver histórico de alterações"):
                         for _, h in hist.iterrows():
                             dt_h = formatar_data(h.get('atualizado_em'))
-                            prazo_h = f" | Novo prazo: {h['novo_prazo']}" if h.get('novo_prazo') else ""
-                            coment_h = f" | Comentário: {h['comentario']}" if h.get('comentario') else ""
+                            prazo_h = f" | Novo prazo: {h['novo_prazo']}" if limpar(h.get('novo_prazo')) else ""
+                            coment_h = f" | Comentário: {h['comentario']}" if limpar(h.get('comentario')) else ""
                             st.markdown(f"- **{dt_h}** — {h.get('atualizado_por','')} mudou de *{h.get('status_anterior','')}* para *{h.get('status_novo','')}*{prazo_h}{coment_h}")
 
                 if usuario != "Selecione...":
@@ -208,35 +222,39 @@ with aba_acoes:
                             key=f"status_{row['id']}"
                         )
                     with col_c:
-                        comentario = st.text_input(
-                            "Comentário (opcional)" if novo_status != "Atrasado" else "Comentário (obrigatório para Atrasado) *",
-                            value="",
-                            key=f"comentario_{row['id']}"
-                        )
+                        label_coment = "Comentário (obrigatório) *" if novo_status == "Atrasado" else "Comentário (opcional)"
+                        comentario = st.text_input(label_coment, value="", key=f"comentario_{row['id']}")
 
-                    # Novo prazo obrigatório se mudou para Em andamento e estava Atrasado
+                    # Novo prazo obrigatório se saindo de Atrasado
                     novo_prazo = None
-                    mudando_prazo = (row['status'] == "Atrasado" and novo_status == "Em andamento")
-                    if mudando_prazo:
+                    mudando_de_atrasado = (row['status'] == "Atrasado" and novo_status != "Atrasado")
+                    if mudando_de_atrasado:
                         st.warning("⚠️ Ação estava atrasada — informe o novo prazo.")
                         novo_prazo = st.date_input("Novo prazo *", value=None, key=f"prazo_{row['id']}")
 
                     if st.button("💾 Salvar", key=f"salvar_{row['id']}"):
+                        status_mudou = novo_status != row['status']
+                        comentario_mudou = comentario.strip() != ""
+
                         # Validações
                         if novo_status == "Atrasado" and not comentario.strip():
                             st.error("Comentário obrigatório ao marcar como Atrasado.")
-                        elif mudando_prazo and not novo_prazo:
+                        elif mudando_de_atrasado and not novo_prazo:
                             st.error("Informe o novo prazo para reabrir a ação.")
-                        elif mudando_prazo and not comentario.strip():
-                            st.error("Comentário obrigatório ao alterar prazo.")
+                        elif mudando_de_atrasado and not comentario.strip():
+                            st.error("Comentário obrigatório ao alterar o prazo.")
+                        elif not status_mudou and not comentario_mudou:
+                            st.warning("Nenhuma alteração detectada. Mude o status ou adicione um comentário.")
                         else:
                             prazo_salvar = novo_prazo.isoformat() if novo_prazo else None
-                            salvar_historico(
-                                row['id'], row['numero'],
-                                row['status'], novo_status,
-                                comentario, prazo_salvar, usuario
-                            )
-                            atualizar_registro(row['id'], novo_status, comentario, usuario, prazo_salvar)
+                            # Só registra histórico se status mudou
+                            if status_mudou:
+                                salvar_historico(
+                                    row['id'], row['numero'],
+                                    row['status'], novo_status,
+                                    comentario, prazo_salvar, usuario
+                                )
+                            atualizar_registro(row['id'], novo_status, comentario or None, usuario, prazo_salvar)
                             st.success(f"✅ Salvo em {agora_brasilia().strftime('%d/%m/%Y %H:%M')}")
                             st.rerun()
                 else:
