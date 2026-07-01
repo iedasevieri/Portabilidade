@@ -3,7 +3,7 @@ from supabase import create_client
 from datetime import datetime, timezone, timedelta, date
 import pandas as pd
 from io import BytesIO
-import pptxgen as pptx
+from pptx import Presentation
 
 SUPABASE_URL = "https://yjvhfhodhlxgprpxelxs.supabase.co"
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
