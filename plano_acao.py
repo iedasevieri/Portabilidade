@@ -14,10 +14,10 @@ def agora_brasilia():
     return datetime.now(BRASILIA)
 
 RESPONSAVEIS = sorted([
-    "Antonio", "Aline", "Andreia", "Borges", "Cícera", "Cristiane",
+    "Antonio", "Aline", "Andreia", "Amanda Medeiros", "Borges", "Cícera", "Cristiane",
     "Dani Vieira", "Diego", "Diego/Antonio", "Ednalva", "Eunice",
-    "Fauzi", "Flávia", "Galvão", "Guilherme Carrasco", "Hebert",
-    "Ieda", "Izabella", "Janaina Cruz", "Janaina/OGS", "Kleiton",
+    "Fauzi", "Flávia", "Galvão", "Giselle", "Guilherme Carrasco", "Hebert",
+    "Ieda", "Irlanilson", "Izabella", "Janaina Cruz", "Janaina/OGS", "Kleiton",
     "Lia Mara", "Luis Fernando", "Marketing", "Natalia", "Núbia",
     "Rogerio Galvão", "Roldão", "Stephanie", "Tânia", "TI", "Viviane"
 ])
@@ -516,21 +516,22 @@ with aba_nova:
         plano = st.text_area("Plano de Ação *", height=100)
         col_n1, col_n2 = st.columns(2)
         with col_n1:
-            responsavel_acao = st.selectbox("Responsável *", ["Selecione..."] + RESPONSAVEIS, key="resp_nova")
+            responsaveis_acao = st.multiselect("Responsável(is) *", RESPONSAVEIS, key="resp_nova")
         with col_n2:
             tipo_novo = st.selectbox("Tipo *", TIPOS, key="tipo_nova")
         prazo = st.date_input("Prazo", value=None, key="prazo_nova")
         observacao = st.text_input("Observação (opcional)")
 
         if st.button("✅ Cadastrar Ação", type="primary"):
-            if not problema or not plano or responsavel_acao == "Selecione...":
+            if not problema or not plano or not responsaveis_acao:
                 st.error("Preencha os campos obrigatórios.")
             else:
+                responsavel_texto = ", ".join(responsaveis_acao)
                 dados = {
                     "numero": proximo_numero, "origem": "Fórum de Portabilidade",
                     "data_entrada": agora_brasilia().strftime("%Y-%m-%d"),
                     "problema_identificado": problema, "plano_de_acao": plano,
-                    "responsavel": responsavel_acao, "tipo": tipo_novo,
+                    "responsavel": responsavel_texto, "tipo": tipo_novo,
                     "prazo": prazo.isoformat() if prazo else None,
                     "data_finalizacao": None, "status": "Em andamento",
                     "dias_atraso": None, "observacao": observacao or None,
