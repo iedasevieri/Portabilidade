@@ -16,7 +16,7 @@ def agora_brasilia():
 RESPONSAVEIS = sorted([
     "Antonio", "Aline", "Andreia", "Amanda Medeiros", "Borges", "Cícera", "Cristiane",
     "Dani Vieira", "Diego", "Diego/Antonio", "Ednalva", "Eunice",
-    "Fauzi", "Flávia", "Galvão", "Giselle", "Guilherme Carrasco", "Hebert",
+    "Fauzi", "Flávia", "Daniel", "Giselle", "Guilherme Carrasco", "Hebert",
     "Ieda", "Irlanilson", "Izabella", "Janaina Cruz", "Janaina/OGS", "Kleiton",
     "Lia Mara", "Luis Fernando", "Marketing", "Natalia", "Núbia",
     "Rogerio Galvão", "Roldão", "Stephanie", "Tânia", "TI", "Viviane"
@@ -24,12 +24,13 @@ RESPONSAVEIS = sorted([
 
 STATUS_OPCOES = ["Em andamento", "Concluído", "Atrasado", "Cancelado"]
 STATUS_ICONS = {"Concluído": "✅", "Atrasado": "⚠️", "Em andamento": "🔄", "Cancelado": "❌"}
-TIPOS = ["Feedback/Treinamento", "Sistema", "Melhoria de Processo", "Projetos", "Outros", "Antigo"]
+TIPOS = ["Feedback/Treinamento", "Sistema", "Melhoria de Processo", "Projetos", "Investigação/Acompanhamento", "Outros", "Antigo"]
 CORES_TIPO = {
     "Feedback/Treinamento": "#0055AA",
     "Sistema": "#CC0000",
     "Melhoria de Processo": "#1A7A1A",
     "Projetos": "#CC7700",
+    "Investigação/Acompanhamento": "#7A1AA0",
     "Outros": "#666666",
     "Antigo": "#999999",
 }
@@ -79,6 +80,10 @@ def atualizar_registro(id_, status, comentario, responsavel, novo_prazo=None, ti
 
 def cadastrar_acao(dados):
     get_supabase().table("plano_acao").insert(dados).execute()
+
+def editar_registro(id_, dados):
+    sb = get_supabase()
+    sb.table("plano_acao").update(dados).eq("id", id_).execute()
 
 def formatar_data(dt_str):
     if not dt_str: return ""
@@ -320,7 +325,42 @@ with aba_acoes:
                         coment_h = f" | Comentário: {h['comentario']}" if limpar(h.get('comentario')) else ""
                         st.markdown(f"- **{dt_h}** — {h.get('atualizado_por','')} mudou de *{h.get('status_anterior','')}* para *{h.get('status_novo','')}*{prazo_h}{coment_h}")
 
+            # ---- EDIÇÃO (corrigir erros de cadastro) ----
+            criado_por = limpar(row.get('criado_por'))
+            pode_editar = (usuario != "Selecione...") and (criado_por is None or criado_por == usuario)
+
             if usuario != "Selecione...":
+                if pode_editar:
+                    with st.expander("✏️ Editar informações desta ação"):
+                        resp_atual_lista = [r.strip() for r in str(row['responsavel']).split(",") if r.strip() in RESPONSAVEIS]
+                        e_problema = st.text_area("Problema Identificado", value=row['problema_identificado'], key=f"e_prob_{row['id']}")
+                        e_plano = st.text_area("Plano de Ação", value=row['plano_de_acao'], key=f"e_plano_{row['id']}")
+                        e_resp = st.multiselect("Responsável(is)", RESPONSAVEIS, default=resp_atual_lista, key=f"e_resp_{row['id']}")
+                        prazo_atual_dt = None
+                        if limpar(row.get('prazo')):
+                            try:
+                                prazo_atual_dt = datetime.strptime(str(row['prazo'])[:10], "%Y-%m-%d").date()
+                            except:
+                                prazo_atual_dt = None
+                        e_prazo = st.date_input("Prazo", value=prazo_atual_dt, key=f"e_prazo_{row['id']}")
+                        e_obs = st.text_input("Observação", value=observacao_atual or "", key=f"e_obs_{row['id']}")
+
+                        if st.button("💾 Salvar correção", key=f"e_salvar_{row['id']}"):
+                            if not e_problema or not e_plano or not e_resp:
+                                st.error("Problema, Plano de Ação e Responsável não podem ficar vazios.")
+                            else:
+                                editar_registro(row['id'], {
+                                    "problema_identificado": e_problema,
+                                    "plano_de_acao": e_plano,
+                                    "responsavel": ", ".join(e_resp),
+                                    "prazo": e_prazo.isoformat() if e_prazo else None,
+                                    "observacao": e_obs or None,
+                                })
+                                st.success("✅ Correção salva!")
+                                st.rerun()
+                else:
+                    st.caption(f"🔒 Só quem cadastrou esta ação ({criado_por}) pode editar as informações.")
+
                 col_s, col_t, col_c = st.columns([1, 1, 2])
                 with col_s:
                     novo_status = st.selectbox("Novo status", STATUS_OPCOES,
@@ -537,6 +577,7 @@ with aba_nova:
                     "dias_atraso": None, "observacao": observacao or None,
                     "comentario": None, "atualizado_por": usuario,
                     "atualizado_em": agora_brasilia().isoformat(),
+                    "criado_por": usuario,
                 }
                 cadastrar_acao(dados)
                 st.success(f"✅ Ação #{proximo_numero} cadastrada!")
