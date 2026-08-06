@@ -10,41 +10,14 @@ st.set_page_config(
     page_icon='📋',
     layout='wide'
 )
+
 # ── Carregar dados ──────────────────────────────────────────────
 @st.cache_data(ttl=300)
 def carregar_dados():
-
-    df = pd.read_excel('plano_acao.xlsx', sheet_name='🗂 Base')
+    df = pd.read_excel('plano_acao.xlsx', sheet_name='🗂️ Base')
     hoje = pd.Timestamp(date.today())
 
     # Recalcula status automaticamente
-    def calcular_status(row):
-        if pd.notna(row['Data Finalização']):
-            return 'Concluído'
-        elif pd.notna(row['Prazo']) < hoje:
-            return 'Atrasado'
-        else:
-            return 'Em andamento'
-
-    df['Status'] = df.apply(calcular_status, axis=1)
-
-    # Dias de atraso recalculado
-    def calcular_atraso(row):
-        if row['Status'] == 'Atrasado':
-            return (hoje - row['Prazo']).days
-        return None
-
-    df['Dias Atraso'] = df.apply(calcular_atraso, axis=1)
-    df['Prazo_fmt'] = df['Prazo'].dt.strftime('%d/%m/%Y')
-    df['Data Finalização_fmt'] = df['Data Finalização'].dt.strftime('%d/%m/%Y').fillna('—')
-
-    return df
-
-df = carregar_dados()
-
-    df = pd.read_excel('plano_acao.xlsx', sheet_name='🗂 Base')
-    hoje = pd.Timestamp(date.today())
-
     def calcular_status(row):
         if pd.notna(row['Data Finalização']):
             return 'Concluído'
@@ -133,10 +106,10 @@ with col_g1:
     contagem = df['Status'].value_counts().reset_index()
     contagem.columns = ['Status', 'Qtde']
     cores = {
-    'Concluído': '#4CAF50',
-    'Atrasado': '#CC0000',
-    'Em andamento': '#FF9800'
-}
+        'Concluído': '#4CAF50',
+        'Atrasado': '#CC0000',
+        'Em andamento': '#FF9800'
+    }
     fig1 = px.pie(contagem, values='Qtde', names='Status',
                   color='Status', color_discrete_map=cores, hole=0.4)
     fig1.update_traces(textinfo='label+value+percent')
@@ -149,9 +122,9 @@ with col_g2:
     fig2 = px.bar(top_resp, orientation='h',
                   color_discrete_sequence=['#CC0000'])
     fig2.update_layout(margin=dict(t=10, b=10),
-                       xaxis_title='Qtde de Ações',
-                       yaxis_title='',
-                       showlegend=False)
+                        xaxis_title='Qtde de Ações',
+                        yaxis_title='',
+                        showlegend=False)
     st.plotly_chart(fig2, use_container_width=True)
 
 st.divider()
@@ -160,16 +133,12 @@ st.divider()
 st.subheader('📋 Ações Detalhadas')
 
 def colorir_status(val):
-
     if val == 'Concluído':
         return 'background-color: #E8F5E9; color: #2E7D32'
-
     elif val == 'Atrasado':
         return 'background-color: #FFEBEE; color: #C62828; font-weight:bold'
-
     elif val == 'Em andamento':
         return 'background-color: #FFF3E0; color: #E65100'
-
     return ''
 
 tabela = df_filtrado[[
@@ -190,8 +159,6 @@ styled_table = tabela.style.map(
 
 st.write(styled_table)
 
-
-
 st.divider()
 
 # ── Alertas de ações atrasadas ───────────────────────────────────
@@ -200,9 +167,7 @@ if len(atrasadas_df) > 0:
     st.subheader('🚨 Ações Atrasadas')
     for _, row in atrasadas_df.iterrows():
         st.error(
-            f"**#{row['Número']} | {row['Responsável']}** — "
+            f"*#{row['Número']} | {row['Responsável']}* — "
             f"{str(row['Problema Identificado'])[:80]}... "
-            f"| Prazo: {row['Prazo_fmt']} | **{int(row['Dias Atraso'])} dias de atraso**"
+            f"| Prazo: {row['Prazo_fmt']} | *{int(row['Dias Atraso'])} dias de atraso*"
         )
-        
-        
