@@ -14,7 +14,8 @@ st.set_page_config(
 # ── Carregar dados ──────────────────────────────────────────────
 @st.cache_data(ttl=300)
 def carregar_dados():
-    
+    st.write("COLUNAS:")
+st.write(df.columns.tolist())
     df = pd.read_excel('plano_acao.xlsx', sheet_name='Base')
   
     hoje = pd.Timestamp(date.today())
