@@ -26,7 +26,7 @@ DIAS_ESTAGNACAO = 7  # dias sem atualização para virar alerta
 STATUS_OPCOES = ['Em andamento', 'Atrasado', 'Concluído']
 TIPO_OPCOES = ['Investigação/Acompanhamento', 'Antigo', 'Sistema', 'Melhoria de Processo']
 
-STATUS_CORES = {'Em andamento': '#CC0000', 'Atrasado': '#B71C1C', 'Concluído': '#2E7D32'}
+STATUS_CORES = {'Em andamento': '#FF9800', 'Atrasado': '#CC0000', 'Concluído': '#4CAF50'}
 STATUS_ICONES = {'Em andamento': '🔄', 'Atrasado': '🚨', 'Concluído': '✅'}
 
 # ── Carregar dados ──────────────────────────────────────────────
@@ -56,9 +56,22 @@ def carregar_dados():
     df['status_calc'] = df.apply(calcular_status, axis=1)
 
     # Status "oficial": o que foi definido manualmente tem prioridade;
-    # se nunca foi definido, usa o calculado pelas datas
+    # se nunca foi definido (ou tem grafia diferente), usa o calculado pelas datas
+    def normalizar_status(val):
+        if pd.isna(val) or not str(val).strip():
+            return None
+        v = str(val).strip().lower()
+        if 'conclu' in v:
+            return 'Concluído'
+        if 'atras' in v:
+            return 'Atrasado'
+        if 'andam' in v:
+            return 'Em andamento'
+        return None
+
     if 'status' in df.columns:
-        df['status_exibicao'] = df['status'].where(df['status'].isin(STATUS_OPCOES), df['status_calc'])
+        df['status_exibicao'] = df['status'].apply(normalizar_status)
+        df['status_exibicao'] = df['status_exibicao'].fillna(df['status_calc'])
     else:
         df['status_exibicao'] = df['status_calc']
 
@@ -273,67 +286,71 @@ st.divider()
 
 # ── Editar uma ação ───────────────────────────────────────────────
 st.subheader('✏️ Atualizar uma Ação')
+st.caption('A lista abaixo respeita os filtros selecionados acima (Responsável, Status, Tipo, busca).')
 
-opcoes = df.apply(lambda r: f"#{r['numero']} — {r['responsavel']} — {str(r['problema_identificado'])[:50]}", axis=1)
-mapa_opcoes = dict(zip(opcoes, df['id']))
+if len(df_filtrado) == 0:
+    st.info('Nenhuma ação corresponde aos filtros selecionados.')
+else:
+    opcoes = df_filtrado.apply(lambda r: f"#{r['numero']} — {r['responsavel']} — {str(r['problema_identificado'])[:50]}", axis=1)
+    mapa_opcoes = dict(zip(opcoes, df_filtrado['id']))
 
-escolha = st.selectbox('Selecione a ação', ['—'] + opcoes.tolist())
+    escolha = st.selectbox('Selecione a ação', ['—'] + opcoes.tolist())
 
-if escolha != '—':
-    acao_id = mapa_opcoes[escolha]
-    linha = df[df['id'] == acao_id].iloc[0]
-    status_atual = linha['status_exibicao']
-    tipo_atual = linha.get('tipo')
+    if escolha != '—':
+        acao_id = mapa_opcoes[escolha]
+        linha = df[df['id'] == acao_id].iloc[0]
+        status_atual = linha['status_exibicao']
+        tipo_atual = linha.get('tipo')
 
-    with st.form('form_editar'):
-        col1, col2 = st.columns(2)
-        with col1:
-            indice_status = STATUS_OPCOES.index(status_atual) if status_atual in STATUS_OPCOES else 0
-            novo_status = st.selectbox('Status', STATUS_OPCOES, index=indice_status)
-            indice_tipo = TIPO_OPCOES.index(tipo_atual) if tipo_atual in TIPO_OPCOES else 0
-            novo_tipo_edicao = st.selectbox('Tipo', TIPO_OPCOES, index=indice_tipo)
-            novo_responsavel = st.text_input('Responsável', value=linha.get('responsavel') or '')
-        with col2:
-            nova_data_final = st.date_input(
-                'Data de Finalização (deixe vazio se ainda não concluído)',
-                value=linha['data_finalizacao'].date() if pd.notna(linha['data_finalizacao']) else None
+        with st.form('form_editar'):
+            col1, col2 = st.columns(2)
+            with col1:
+                indice_status = STATUS_OPCOES.index(status_atual) if status_atual in STATUS_OPCOES else 0
+                novo_status = st.selectbox('Status', STATUS_OPCOES, index=indice_status)
+                indice_tipo = TIPO_OPCOES.index(tipo_atual) if tipo_atual in TIPO_OPCOES else 0
+                novo_tipo_edicao = st.selectbox('Tipo', TIPO_OPCOES, index=indice_tipo)
+                novo_responsavel = st.text_input('Responsável', value=linha.get('responsavel') or '')
+            with col2:
+                nova_data_final = st.date_input(
+                    'Data de Finalização (deixe vazio se ainda não concluído)',
+                    value=linha['data_finalizacao'].date() if pd.notna(linha['data_finalizacao']) else None
+                )
+                quem_atualizou = st.text_input('Seu nome (quem está atualizando)')
+
+            novo_comentario = st.text_area(
+                'Comentário / Andamento',
+                value=linha.get('comentario') or '',
+                help='Obrigatório sempre que o status é alterado.'
             )
-            quem_atualizou = st.text_input('Seu nome (quem está atualizando)')
 
-        novo_comentario = st.text_area(
-            'Comentário / Andamento',
-            value=linha.get('comentario') or '',
-            help='Obrigatório sempre que o status é alterado.'
-        )
+            enviado = st.form_submit_button('💾 Salvar Atualização')
 
-        enviado = st.form_submit_button('💾 Salvar Atualização')
+            if enviado:
+                erros = []
+                if not quem_atualizou.strip():
+                    erros.append('Informe seu nome.')
+                if novo_status != status_atual and not novo_comentario.strip():
+                    erros.append('Comentário é obrigatório ao mudar o status.')
 
-        if enviado:
-            erros = []
-            if not quem_atualizou.strip():
-                erros.append('Informe seu nome.')
-            if novo_status != status_atual and not novo_comentario.strip():
-                erros.append('Comentário é obrigatório ao mudar o status.')
+                if erros:
+                    for e in erros:
+                        st.error(e)
+                else:
+                    update_data = {
+                        'status': novo_status,
+                        'tipo': novo_tipo_edicao,
+                        'comentario': novo_comentario,
+                        'responsavel': novo_responsavel,
+                        'atualizado_em': datetime.now().isoformat(),
+                        'atualizado_por': quem_atualizou.strip(),
+                    }
+                    if nova_data_final:
+                        update_data['data_finalizacao'] = nova_data_final.isoformat()
 
-            if erros:
-                for e in erros:
-                    st.error(e)
-            else:
-                update_data = {
-                    'status': novo_status,
-                    'tipo': novo_tipo_edicao,
-                    'comentario': novo_comentario,
-                    'responsavel': novo_responsavel,
-                    'atualizado_em': datetime.now().isoformat(),
-                    'atualizado_por': quem_atualizou.strip(),
-                }
-                if nova_data_final:
-                    update_data['data_finalizacao'] = nova_data_final.isoformat()
-
-                supabase.table(TABELA).update(update_data).eq('id', acao_id).execute()
-                st.success('Ação atualizada com sucesso!')
-                st.cache_data.clear()
-                st.rerun()
+                    supabase.table(TABELA).update(update_data).eq('id', acao_id).execute()
+                    st.success('Ação atualizada com sucesso!')
+                    st.cache_data.clear()
+                    st.rerun()
 
 st.divider()
 
