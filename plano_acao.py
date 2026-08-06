@@ -18,6 +18,7 @@ def carregar_dados():
     df = pd.read_excel('plano_acao.xlsx', sheet_name='🗂 Base')
     hoje = pd.Timestamp(date.today())
 
+    # Recalcula status automaticamente
     def calcular_status(row):
         if pd.notna(row['Data Finalização']):
             return 'Concluído'
@@ -28,12 +29,14 @@ def carregar_dados():
 
     df['Status'] = df.apply(calcular_status, axis=1)
 
+    # Dias de atraso recalculado
     def calcular_atraso(row):
         if row['Status'] == 'Atrasado':
             return (hoje - row['Prazo']).days
         return None
 
     df['Dias Atraso'] = df.apply(calcular_atraso, axis=1)
+
     df['Prazo_fmt'] = df['Prazo'].dt.strftime('%d/%m/%Y')
     df['Data Finalização_fmt'] = (
         df['Data Finalização']
@@ -42,13 +45,9 @@ def carregar_dados():
     )
 
     return df
-  
-    hoje = pd.Timestamp(date.today())
 
-    
-    # Recalcula status automaticamente
-@st.cache_data(ttl=300)
-def carregar_dados():
+
+df = carregar_dados()
 
     df = pd.read_excel('plano_acao.xlsx', sheet_name='🗂 Base')
     hoje = pd.Timestamp(date.today())
@@ -143,7 +142,6 @@ with col_g1:
     cores = {
     'Concluído': '#4CAF50',
     'Atrasado': '#CC0000',
-    'Atrasado c/ atualização': '#8B0000',
     'Em andamento': '#FF9800'
 }
     fig1 = px.pie(contagem, values='Qtde', names='Status',
@@ -176,9 +174,6 @@ def colorir_status(val):
     elif val == 'Atrasado':
         return 'background-color: #FFEBEE; color: #C62828; font-weight:bold'
 
-    elif val == 'Atrasado c/ atualização':
-        return 'background-color: #FCE4EC; color: #880E4F; font-weight:bold'
-
     elif val == 'Em andamento':
         return 'background-color: #FFF3E0; color: #E65100'
 
@@ -189,7 +184,6 @@ tabela = df_filtrado[[
     'Responsável',
     'Problema Identificado',
     'Plano de Ação',
-    'Comentário',
     'Prazo_fmt',
     'Data Finalização_fmt',
     'Status',
