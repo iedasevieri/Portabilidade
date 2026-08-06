@@ -28,7 +28,7 @@ def calcular_status(row):
 
     if pd.notna(row['Prazo']) and row['Prazo'] < hoje:
 
-        if pd.notna(row['Comentário']) and str(row['Comentário']).strip():
+        if pd.notna(row['Observação']) and str(row['Observação']).strip():
             return 'Atrasado c/ atualização'
 
         return 'Atrasado'
