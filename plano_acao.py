@@ -193,7 +193,8 @@ st.write(styled_table)
 
 st.divider()
 
-STATUS_OPCOES = ['Em andamento', 'Investigação/Acompanhamento', 'Atrasado', 'Concluído']
+STATUS_OPCOES = ['Em andamento', 'Atrasado', 'Concluído']
+TIPO_OPCOES = ['Investigação/Acompanhamento', 'Antigo', 'Sistema', 'Melhoria de Processo']
 
 # ── Criar nova ação ────────────────────────────────────────────────
 st.subheader('➕ Criar Nova Ação')
@@ -205,10 +206,11 @@ with st.expander('Abrir formulário de nova ação'):
             novo_problema = st.text_area('Problema Identificado *')
             novo_plano = st.text_area('Plano de Ação *')
             novo_resp = st.text_input('Responsável *')
+            novo_tipo = st.selectbox('Tipo *', TIPO_OPCOES)
         with col2:
             novo_prazo = st.date_input('Prazo *', value=date.today())
             novo_status_criacao = st.selectbox('Status inicial', STATUS_OPCOES)
-            comentario_criacao = st.text_area('Comentário inicial *')
+            comentario_criacao = st.text_area('Comentário / Contexto (opcional)')
             criado_por = st.text_input('Seu nome (quem está criando) *')
 
         criar = st.form_submit_button('➕ Criar Ação')
@@ -218,7 +220,6 @@ with st.expander('Abrir formulário de nova ação'):
             if not novo_problema.strip(): faltando.append('Problema Identificado')
             if not novo_plano.strip(): faltando.append('Plano de Ação')
             if not novo_resp.strip(): faltando.append('Responsável')
-            if not comentario_criacao.strip(): faltando.append('Comentário inicial')
             if not criado_por.strip(): faltando.append('Seu nome')
 
             if faltando:
@@ -237,6 +238,7 @@ with st.expander('Abrir formulário de nova ação'):
                     'responsavel': novo_resp.strip(),
                     'prazo': novo_prazo.isoformat(),
                     'status': novo_status_criacao,
+                    'tipo': novo_tipo,
                     'comentario': comentario_criacao.strip(),
                     'atualizado_em': datetime.now().isoformat(),
                     'atualizado_por': criado_por.strip(),
@@ -261,12 +263,15 @@ if escolha != '—':
     acao_id = mapa_opcoes[escolha]
     linha = df[df['id'] == acao_id].iloc[0]
     status_atual = linha.get('status') or linha.get('status_calc')
+    tipo_atual = linha.get('tipo')
 
     with st.form('form_editar'):
         col1, col2 = st.columns(2)
         with col1:
             indice_status = STATUS_OPCOES.index(status_atual) if status_atual in STATUS_OPCOES else 0
             novo_status = st.selectbox('Status', STATUS_OPCOES, index=indice_status)
+            indice_tipo = TIPO_OPCOES.index(tipo_atual) if tipo_atual in TIPO_OPCOES else 0
+            novo_tipo_edicao = st.selectbox('Tipo', TIPO_OPCOES, index=indice_tipo)
             novo_responsavel = st.text_input('Responsável', value=linha.get('responsavel') or '')
         with col2:
             nova_data_final = st.date_input(
@@ -296,6 +301,7 @@ if escolha != '—':
             else:
                 update_data = {
                     'status': novo_status,
+                    'tipo': novo_tipo_edicao,
                     'comentario': novo_comentario,
                     'responsavel': novo_responsavel,
                     'atualizado_em': datetime.now().isoformat(),
