@@ -193,6 +193,62 @@ st.write(styled_table)
 
 st.divider()
 
+STATUS_OPCOES = ['Em andamento', 'Investigação/Acompanhamento', 'Atrasado', 'Concluído']
+
+# ── Criar nova ação ────────────────────────────────────────────────
+st.subheader('➕ Criar Nova Ação')
+
+with st.expander('Abrir formulário de nova ação'):
+    with st.form('form_criar', clear_on_submit=True):
+        col1, col2 = st.columns(2)
+        with col1:
+            novo_problema = st.text_area('Problema Identificado *')
+            novo_plano = st.text_area('Plano de Ação *')
+            novo_resp = st.text_input('Responsável *')
+        with col2:
+            novo_prazo = st.date_input('Prazo *', value=date.today())
+            novo_status_criacao = st.selectbox('Status inicial', STATUS_OPCOES)
+            comentario_criacao = st.text_area('Comentário inicial *')
+            criado_por = st.text_input('Seu nome (quem está criando) *')
+
+        criar = st.form_submit_button('➕ Criar Ação')
+
+        if criar:
+            faltando = []
+            if not novo_problema.strip(): faltando.append('Problema Identificado')
+            if not novo_plano.strip(): faltando.append('Plano de Ação')
+            if not novo_resp.strip(): faltando.append('Responsável')
+            if not comentario_criacao.strip(): faltando.append('Comentário inicial')
+            if not criado_por.strip(): faltando.append('Seu nome')
+
+            if faltando:
+                st.error('Preencha os campos obrigatórios: ' + ', '.join(faltando))
+            else:
+                try:
+                    numeros_validos = pd.to_numeric(df['numero'], errors='coerce').dropna()
+                    proximo_numero = str(int(numeros_validos.max()) + 1) if len(numeros_validos) > 0 else '1'
+                except Exception:
+                    proximo_numero = str(len(df) + 1)
+
+                novo_registro = {
+                    'numero': proximo_numero,
+                    'problema_identificado': novo_problema.strip(),
+                    'plano_de_acao': novo_plano.strip(),
+                    'responsavel': novo_resp.strip(),
+                    'prazo': novo_prazo.isoformat(),
+                    'status': novo_status_criacao,
+                    'comentario': comentario_criacao.strip(),
+                    'atualizado_em': datetime.now().isoformat(),
+                    'atualizado_por': criado_por.strip(),
+                    'criado_por': criado_por.strip(),
+                }
+                supabase.table(TABELA).insert(novo_registro).execute()
+                st.success(f'Ação #{proximo_numero} criada com sucesso!')
+                st.cache_data.clear()
+                st.rerun()
+
+st.divider()
+
 # ── Editar uma ação ───────────────────────────────────────────────
 st.subheader('✏️ Atualizar uma Ação')
 
@@ -204,11 +260,13 @@ escolha = st.selectbox('Selecione a ação', ['—'] + opcoes.tolist())
 if escolha != '—':
     acao_id = mapa_opcoes[escolha]
     linha = df[df['id'] == acao_id].iloc[0]
+    status_atual = linha.get('status') or linha.get('status_calc')
 
     with st.form('form_editar'):
         col1, col2 = st.columns(2)
         with col1:
-            novo_comentario = st.text_area('Comentário / Andamento', value=linha.get('comentario') or '')
+            indice_status = STATUS_OPCOES.index(status_atual) if status_atual in STATUS_OPCOES else 0
+            novo_status = st.selectbox('Status', STATUS_OPCOES, index=indice_status)
             novo_responsavel = st.text_input('Responsável', value=linha.get('responsavel') or '')
         with col2:
             nova_data_final = st.date_input(
@@ -217,13 +275,27 @@ if escolha != '—':
             )
             quem_atualizou = st.text_input('Seu nome (quem está atualizando)')
 
+        novo_comentario = st.text_area(
+            'Comentário / Andamento',
+            value=linha.get('comentario') or '',
+            help='Obrigatório sempre que o status é alterado.'
+        )
+
         enviado = st.form_submit_button('💾 Salvar Atualização')
 
         if enviado:
+            erros = []
             if not quem_atualizou.strip():
-                st.error('Informe seu nome antes de salvar.')
+                erros.append('Informe seu nome.')
+            if novo_status != status_atual and not novo_comentario.strip():
+                erros.append('Comentário é obrigatório ao mudar o status.')
+
+            if erros:
+                for e in erros:
+                    st.error(e)
             else:
                 update_data = {
+                    'status': novo_status,
                     'comentario': novo_comentario,
                     'responsavel': novo_responsavel,
                     'atualizado_em': datetime.now().isoformat(),
@@ -245,9 +317,9 @@ if len(atrasadas_df) > 0:
     st.subheader('🚨 Ações Atrasadas')
     for _, row in atrasadas_df.iterrows():
         st.error(
-            f"*#{row['numero']} | {row['responsavel']}* — "
+            f"**#{row['numero']} | {row['responsavel']}** — "
             f"{str(row['problema_identificado'])[:80]}... "
-            f"| Prazo: {row['prazo_fmt']} | *{int(row['dias_atraso_calc'])} dias de atraso*"
+            f"| Prazo: {row['prazo_fmt']} | **{int(row['dias_atraso_calc'])} dias de atraso**"
         )
 
 # ── Alertas de ações estagnadas (novo) ────────────────────────────
@@ -258,7 +330,7 @@ if len(estagnadas_df) > 0:
     for _, row in estagnadas_df.iterrows():
         dias_txt = f"{int(row['dias_sem_atualizacao'])} dias" if pd.notna(row['dias_sem_atualizacao']) else "nunca atualizada"
         st.warning(
-            f"*#{row['numero']} | {row['responsavel']}* — "
+            f"**#{row['numero']} | {row['responsavel']}** — "
             f"{str(row['problema_identificado'])[:80]}... "
-            f"| Última atualização: *{dias_txt}*"
+            f"| Última atualização: **{dias_txt}**"
         )
