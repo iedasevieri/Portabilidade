@@ -15,7 +15,7 @@ st.set_page_config(
 @st.cache_data(ttl=300)
 def carregar_dados():
 
-    df = pd.read_excel('plano_acao.xlsx', sheet_name='🗂Base')
+    df = pd.read_excel('plano_acao.xlsx', sheet_name='Base')
     hoje = pd.Timestamp(date.today())
 
     # Recalcula status automaticamente
