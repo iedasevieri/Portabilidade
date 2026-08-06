@@ -14,9 +14,34 @@ st.set_page_config(
 # ── Carregar dados ──────────────────────────────────────────────
 @st.cache_data(ttl=300)
 def carregar_dados():
-    st.write("COLUNAS:")
-st.write(df.columns.tolist())
-   df = pd.read_excel('plano_acao.xlsx', sheet_name='🗂 Base')
+
+    df = pd.read_excel('plano_acao.xlsx', sheet_name='🗂 Base')
+    hoje = pd.Timestamp(date.today())
+
+    def calcular_status(row):
+        if pd.notna(row['Data Finalização']):
+            return 'Concluído'
+        elif pd.notna(row['Prazo']) and row['Prazo'] < hoje:
+            return 'Atrasado'
+        else:
+            return 'Em andamento'
+
+    df['Status'] = df.apply(calcular_status, axis=1)
+
+    def calcular_atraso(row):
+        if row['Status'] == 'Atrasado':
+            return (hoje - row['Prazo']).days
+        return None
+
+    df['Dias Atraso'] = df.apply(calcular_atraso, axis=1)
+    df['Prazo_fmt'] = df['Prazo'].dt.strftime('%d/%m/%Y')
+    df['Data Finalização_fmt'] = (
+        df['Data Finalização']
+        .dt.strftime('%d/%m/%Y')
+        .fillna('—')
+    )
+
+    return df
   
     hoje = pd.Timestamp(date.today())
 
@@ -45,7 +70,7 @@ def calcular_status(row):
     return df
 
 df = carregar_dados()
-# st.write(df[['Número','Responsável','Prazo','Data Finalização','Status']])
+
 # ── Header ──────────────────────────────────────────────────────
 st.markdown("""
 <div style='background-color:#CC0000;padding:16px 24px;border-radius:10px;margin-bottom:20px;'>
