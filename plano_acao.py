@@ -120,29 +120,8 @@ st.markdown("""
 </div>
 """.format(data=datetime.today().strftime('%d/%m/%Y %H:%M')), unsafe_allow_html=True)
 
-if df.empty:
-    st.warning("Nenhum registro encontrado na tabela.")
-    st.stop()
-
-# ── Cards de resumo ─────────────────────────────────────────────
-total = len(df)
-concluidas = len(df[df['status_exibicao'] == 'Concluído'])
-atrasadas = len(df[df['status_exibicao'] == 'Atrasado'])
-andamento = len(df[df['status_exibicao'] == 'Em andamento'])
-estagnadas = df['estagnada'].sum()
-taxa = round(concluidas / total * 100, 1) if total > 0 else 0
-
-c1, c2, c3, c4, c5, c6 = st.columns(6)
-c1.metric('Total de Ações', total)
-c2.metric('✅ Concluídas', concluidas)
-c3.metric('⚠️ Atrasadas', atrasadas)
-c4.metric('🔄 Em andamento', andamento)
-c5.metric('🕒 Estagnadas', int(estagnadas))
-c6.metric('📈 Taxa de Conclusão', f'{taxa}%')
-
-st.divider()
-
 # ── Filtros ─────────────────────────────────────────────────────
+st.subheader('🔍 Filtros')
 col_f1, col_f2, col_f3, col_f4 = st.columns(4)
 
 with col_f1:
@@ -160,6 +139,28 @@ with col_f3:
 with col_f4:
     busca = st.text_input('🔍 Buscar por palavra-chave')
 
+col_p1, col_p2 = st.columns([1, 2])
+with col_p1:
+    periodo_opts = ['Todos', 'Últimos 30 dias', 'Últimos 3 meses', 'Últimos 6 meses', 'Ano atual', 'Personalizado']
+    filtro_periodo = st.selectbox('📅 Período (Prazo)', periodo_opts)
+
+data_ini, data_fim = None, None
+if filtro_periodo == 'Personalizado':
+    with col_p2:
+        intervalo = st.date_input('Selecione o intervalo', value=(date.today().replace(day=1), date.today()))
+        if isinstance(intervalo, tuple) and len(intervalo) == 2:
+            data_ini, data_fim = intervalo
+
+hoje_ts = pd.Timestamp(date.today())
+if filtro_periodo == 'Últimos 30 dias':
+    data_ini = hoje_ts - pd.Timedelta(days=30)
+elif filtro_periodo == 'Últimos 3 meses':
+    data_ini = hoje_ts - pd.Timedelta(days=90)
+elif filtro_periodo == 'Últimos 6 meses':
+    data_ini = hoje_ts - pd.Timedelta(days=180)
+elif filtro_periodo == 'Ano atual':
+    data_ini = pd.Timestamp(date(date.today().year, 1, 1))
+
 df_filtrado = df.copy()
 if filtro_resp != 'Todos':
     df_filtrado = df_filtrado[df_filtrado['responsavel'] == filtro_resp]
@@ -172,8 +173,30 @@ if busca:
         df_filtrado['problema_identificado'].str.contains(busca, case=False, na=False) |
         df_filtrado['plano_de_acao'].str.contains(busca, case=False, na=False)
     ]
+if data_ini is not None:
+    df_filtrado = df_filtrado[df_filtrado['prazo'] >= pd.Timestamp(data_ini)]
+if data_fim is not None:
+    df_filtrado = df_filtrado[df_filtrado['prazo'] <= pd.Timestamp(data_fim)]
 
-st.caption(f'Exibindo {len(df_filtrado)} de {total} ações')
+st.caption(f'Exibindo {len(df_filtrado)} de {len(df)} ações')
+
+st.divider()
+
+# ── Cards de resumo (respeitam os filtros acima) ──────────────────
+total = len(df_filtrado)
+concluidas = len(df_filtrado[df_filtrado['status_exibicao'] == 'Concluído'])
+atrasadas = len(df_filtrado[df_filtrado['status_exibicao'] == 'Atrasado'])
+andamento = len(df_filtrado[df_filtrado['status_exibicao'] == 'Em andamento'])
+estagnadas = df_filtrado['estagnada'].sum()
+taxa = round(concluidas / total * 100, 1) if total > 0 else 0
+
+c1, c2, c3, c4, c5, c6 = st.columns(6)
+c1.metric('Total de Ações', total)
+c2.metric('✅ Concluídas', concluidas)
+c3.metric('⚠️ Atrasadas', atrasadas)
+c4.metric('🔄 Em andamento', andamento)
+c5.metric('🕒 Estagnadas', int(estagnadas))
+c6.metric('📈 Taxa de Conclusão', f'{taxa}%')
 
 st.divider()
 
@@ -182,7 +205,7 @@ col_g1, col_g2 = st.columns(2)
 
 with col_g1:
     st.subheader('Status das Ações')
-    contagem = df['status_exibicao'].value_counts().reset_index()
+    contagem = df_filtrado['status_exibicao'].value_counts().reset_index()
     contagem.columns = ['Status', 'Qtde']
     fig1 = px.pie(contagem, values='Qtde', names='Status',
                   color='Status', color_discrete_map=STATUS_CORES, hole=0.4)
@@ -192,7 +215,7 @@ with col_g1:
 
 with col_g2:
     st.subheader('Top 10 Responsáveis por Ações')
-    top_resp = df.groupby('responsavel').size().sort_values(ascending=True).tail(10)
+    top_resp = df_filtrado.groupby('responsavel').size().sort_values(ascending=True).tail(10)
     fig2 = px.bar(top_resp, orientation='h', color_discrete_sequence=['#CC0000'])
     fig2.update_layout(margin=dict(t=10, b=10), xaxis_title='Qtde de Ações',
                         yaxis_title='', showlegend=False)
