@@ -45,15 +45,21 @@ def carregar_dados():
   
     hoje = pd.Timestamp(date.today())
 
+    
     # Recalcula status automaticamente
-    # Recalcula status automaticamente
-def calcular_status(row):
-    if pd.notna(row['Data Finalização']):
-        return 'Concluído'
-    elif pd.notna(row['Prazo']) and row['Prazo'] < hoje:
-        return 'Atrasado'
-    else:
-        return 'Em andamento''
+@st.cache_data(ttl=300)
+def carregar_dados():
+
+    df = pd.read_excel('plano_acao.xlsx', sheet_name='🗂 Base')
+    hoje = pd.Timestamp(date.today())
+
+    def calcular_status(row):
+        if pd.notna(row['Data Finalização']):
+            return 'Concluído'
+        elif pd.notna(row['Prazo']) and row['Prazo'] < hoje:
+            return 'Atrasado'
+        else:
+            return 'Em andamento'
 
     df['Status'] = df.apply(calcular_status, axis=1)
 
@@ -84,9 +90,7 @@ st.markdown("""
 # ── Cards de resumo ─────────────────────────────────────────────
 total = len(df)
 concluidas = len(df[df['Status'] == 'Concluído'])
-atrasadas = len(
-    df[df['Status'].isin(['Atrasado', 'Atrasado c/ atualização'])]
-)
+atrasadas = len(df[df['Status'] == 'Atrasado'])
 andamento = len(df[df['Status'] == 'Em andamento'])
 taxa = round(concluidas / total * 100, 1) if total > 0 else 0
 
