@@ -187,41 +187,32 @@ with col_g2:
 
 st.divider()
 
-# ── Ações Detalhadas (cards agrupados por status) ─────────────────
+# ── Tabela principal ─────────────────────────────────────────────
 st.subheader('📋 Ações Detalhadas')
 
-for status_grupo in STATUS_OPCOES:
-    grupo_df = df_filtrado[df_filtrado['status_exibicao'] == status_grupo]
-    if len(grupo_df) == 0:
-        continue
+def colorir_status(val):
+    if val == 'Concluído':
+        return 'background-color: #E8F5E9; color: #2E7D32'
+    elif val == 'Atrasado':
+        return 'background-color: #FFEBEE; color: #C62828; font-weight:bold'
+    elif val == 'Em andamento':
+        return 'background-color: #FFF3E0; color: #E65100'
+    return ''
 
-    cor = STATUS_CORES.get(status_grupo, '#CC0000')
-    icone = STATUS_ICONES.get(status_grupo, '📌')
+tabela = df_filtrado[[
+    'numero', 'responsavel', 'tipo', 'problema_identificado', 'plano_de_acao',
+    'prazo_fmt', 'data_finalizacao_fmt', 'status_exibicao', 'dias_atraso_calc',
+    'atualizado_em_fmt', 'atualizado_por'
+]].rename(columns={
+    'numero': 'Número', 'responsavel': 'Responsável', 'tipo': 'Tipo',
+    'problema_identificado': 'Problema', 'plano_de_acao': 'Plano de Ação',
+    'prazo_fmt': 'Prazo', 'data_finalizacao_fmt': 'Finalização',
+    'status_exibicao': 'Status', 'dias_atraso_calc': 'Dias Atraso',
+    'atualizado_em_fmt': 'Última Atualização', 'atualizado_por': 'Atualizado Por'
+})
 
-    st.markdown(f"""
-    <div style='background-color:{cor};padding:14px 20px;border-radius:8px;margin-top:16px;margin-bottom:10px;'>
-        <h3 style='color:white;margin:0;'>{icone} {status_grupo} ({len(grupo_df)})</h3>
-    </div>
-    """, unsafe_allow_html=True)
-
-    for _, row in grupo_df.sort_values('numero').iterrows():
-        tipo_txt = row['tipo'] if pd.notna(row['tipo']) else '—'
-
-        if row['estagnada']:
-            rastreio = f"⚠️ **Sem atualização há {int(row['dias_sem_atualizacao'])} dias** (última: {row['atualizado_por'] or '—'})" if pd.notna(row['dias_sem_atualizacao']) else "⚠️ **Nunca foi atualizada**"
-        else:
-            rastreio = f"🕒 Atualizado em {row['atualizado_em_fmt']} por **{row['atualizado_por'] or '—'}**"
-
-        with st.container(border=True):
-            st.markdown(
-                f"**#{row['numero']} — {row['responsavel']}** | Prazo: {row['prazo_fmt']} | Tipo: *{tipo_txt}*"
-            )
-            st.markdown(f"📌 {row['problema_identificado']}")
-            if pd.notna(row['plano_de_acao']) and str(row['plano_de_acao']).strip():
-                st.markdown(f"🔄 {row['plano_de_acao']}")
-            if pd.notna(row['comentario']) and str(row['comentario']).strip():
-                st.caption(f"💬 {row['comentario']}")
-            st.caption(rastreio)
+styled_table = tabela.style.map(colorir_status, subset=['Status'])
+st.write(styled_table)
 
 st.divider()
 
