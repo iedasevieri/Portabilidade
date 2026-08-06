@@ -16,7 +16,7 @@ st.set_page_config(
 def carregar_dados():
     
     df = pd.read_excel('plano_acao.xlsx', sheet_name='Base')
-    st.write(df.columns.tolist())
+  
     hoje = pd.Timestamp(date.today())
 
     # Recalcula status automaticamente
