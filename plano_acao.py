@@ -23,6 +23,12 @@ supabase = get_supabase()
 TABELA = "plano_acao"
 DIAS_ESTAGNACAO = 7  # dias sem atualização para virar alerta
 
+STATUS_OPCOES = ['Em andamento', 'Atrasado', 'Concluído']
+TIPO_OPCOES = ['Investigação/Acompanhamento', 'Antigo', 'Sistema', 'Melhoria de Processo']
+
+STATUS_CORES = {'Em andamento': '#CC0000', 'Atrasado': '#B71C1C', 'Concluído': '#2E7D32'}
+STATUS_ICONES = {'Em andamento': '🔄', 'Atrasado': '🚨', 'Concluído': '✅'}
+
 # ── Carregar dados ──────────────────────────────────────────────
 @st.cache_data(ttl=60)
 def carregar_dados():
@@ -38,6 +44,7 @@ def carregar_dados():
     df['data_finalizacao'] = pd.to_datetime(df['data_finalizacao'], errors='coerce')
     df['atualizado_em'] = pd.to_datetime(df['atualizado_em'], errors='coerce', utc=True).dt.tz_localize(None)
 
+    # Status calculado automaticamente a partir das datas (fallback)
     def calcular_status(row):
         if pd.notna(row['data_finalizacao']):
             return 'Concluído'
@@ -48,8 +55,16 @@ def carregar_dados():
 
     df['status_calc'] = df.apply(calcular_status, axis=1)
 
+    # Status "oficial": o que foi definido manualmente tem prioridade;
+    # se nunca foi definido, usa o calculado pelas datas
+    if 'status' in df.columns:
+        df['status_exibicao'] = df['status'].where(df['status'].isin(STATUS_OPCOES), df['status_calc'])
+    else:
+        df['status_exibicao'] = df['status_calc']
+
+    # Atraso de prazo (independente do status manual escolhido)
     def calcular_atraso(row):
-        if row['status_calc'] == 'Atrasado':
+        if pd.notna(row['prazo']) and row['prazo'] < hoje and pd.isna(row['data_finalizacao']):
             return (hoje - row['prazo']).days
         return None
 
@@ -65,11 +80,14 @@ def carregar_dados():
 
     def estagnada(row):
         return (
-            row['status_calc'] == 'Em andamento'
+            row['status_exibicao'] == 'Em andamento'
             and (pd.isna(row['dias_sem_atualizacao']) or row['dias_sem_atualizacao'] >= DIAS_ESTAGNACAO)
         )
 
     df['estagnada'] = df.apply(estagnada, axis=1)
+
+    if 'tipo' not in df.columns:
+        df['tipo'] = None
 
     df['prazo_fmt'] = df['prazo'].dt.strftime('%d/%m/%Y').fillna('—')
     df['data_finalizacao_fmt'] = df['data_finalizacao'].dt.strftime('%d/%m/%Y').fillna('—')
@@ -95,9 +113,9 @@ if df.empty:
 
 # ── Cards de resumo ─────────────────────────────────────────────
 total = len(df)
-concluidas = len(df[df['status_calc'] == 'Concluído'])
-atrasadas = len(df[df['status_calc'] == 'Atrasado'])
-andamento = len(df[df['status_calc'] == 'Em andamento'])
+concluidas = len(df[df['status_exibicao'] == 'Concluído'])
+atrasadas = len(df[df['status_exibicao'] == 'Atrasado'])
+andamento = len(df[df['status_exibicao'] == 'Em andamento'])
 estagnadas = df['estagnada'].sum()
 taxa = round(concluidas / total * 100, 1) if total > 0 else 0
 
@@ -112,24 +130,30 @@ c6.metric('📈 Taxa de Conclusão', f'{taxa}%')
 st.divider()
 
 # ── Filtros ─────────────────────────────────────────────────────
-col_f1, col_f2, col_f3 = st.columns(3)
+col_f1, col_f2, col_f3, col_f4 = st.columns(4)
 
 with col_f1:
     responsaveis = ['Todos'] + sorted(df['responsavel'].dropna().unique().tolist())
     filtro_resp = st.selectbox('👤 Responsável', responsaveis)
 
 with col_f2:
-    status_opts = ['Todos'] + sorted(df['status_calc'].unique().tolist())
+    status_opts = ['Todos'] + sorted(df['status_exibicao'].dropna().unique().tolist())
     filtro_status = st.selectbox('📌 Status', status_opts)
 
 with col_f3:
+    tipo_opts = ['Todos'] + sorted(df['tipo'].dropna().unique().tolist())
+    filtro_tipo = st.selectbox('🏷️ Tipo', tipo_opts)
+
+with col_f4:
     busca = st.text_input('🔍 Buscar por palavra-chave')
 
 df_filtrado = df.copy()
 if filtro_resp != 'Todos':
     df_filtrado = df_filtrado[df_filtrado['responsavel'] == filtro_resp]
 if filtro_status != 'Todos':
-    df_filtrado = df_filtrado[df_filtrado['status_calc'] == filtro_status]
+    df_filtrado = df_filtrado[df_filtrado['status_exibicao'] == filtro_status]
+if filtro_tipo != 'Todos':
+    df_filtrado = df_filtrado[df_filtrado['tipo'] == filtro_tipo]
 if busca:
     df_filtrado = df_filtrado[
         df_filtrado['problema_identificado'].str.contains(busca, case=False, na=False) |
@@ -145,11 +169,10 @@ col_g1, col_g2 = st.columns(2)
 
 with col_g1:
     st.subheader('Status das Ações')
-    contagem = df['status_calc'].value_counts().reset_index()
+    contagem = df['status_exibicao'].value_counts().reset_index()
     contagem.columns = ['Status', 'Qtde']
-    cores = {'Concluído': '#4CAF50', 'Atrasado': '#CC0000', 'Em andamento': '#FF9800'}
     fig1 = px.pie(contagem, values='Qtde', names='Status',
-                  color='Status', color_discrete_map=cores, hole=0.4)
+                  color='Status', color_discrete_map=STATUS_CORES, hole=0.4)
     fig1.update_traces(textinfo='label+value+percent')
     fig1.update_layout(margin=dict(t=10, b=10), showlegend=False)
     st.plotly_chart(fig1, use_container_width=True)
@@ -164,37 +187,43 @@ with col_g2:
 
 st.divider()
 
-# ── Tabela principal ─────────────────────────────────────────────
+# ── Ações Detalhadas (cards agrupados por status) ─────────────────
 st.subheader('📋 Ações Detalhadas')
 
-def colorir_status(val):
-    if val == 'Concluído':
-        return 'background-color: #E8F5E9; color: #2E7D32'
-    elif val == 'Atrasado':
-        return 'background-color: #FFEBEE; color: #C62828; font-weight:bold'
-    elif val == 'Em andamento':
-        return 'background-color: #FFF3E0; color: #E65100'
-    return ''
+for status_grupo in STATUS_OPCOES:
+    grupo_df = df_filtrado[df_filtrado['status_exibicao'] == status_grupo]
+    if len(grupo_df) == 0:
+        continue
 
-tabela = df_filtrado[[
-    'numero', 'responsavel', 'problema_identificado', 'plano_de_acao',
-    'prazo_fmt', 'data_finalizacao_fmt', 'status_calc', 'dias_atraso_calc',
-    'atualizado_em_fmt', 'atualizado_por'
-]].rename(columns={
-    'numero': 'Número', 'responsavel': 'Responsável',
-    'problema_identificado': 'Problema', 'plano_de_acao': 'Plano de Ação',
-    'prazo_fmt': 'Prazo', 'data_finalizacao_fmt': 'Finalização',
-    'status_calc': 'Status', 'dias_atraso_calc': 'Dias Atraso',
-    'atualizado_em_fmt': 'Última Atualização', 'atualizado_por': 'Atualizado Por'
-})
+    cor = STATUS_CORES.get(status_grupo, '#CC0000')
+    icone = STATUS_ICONES.get(status_grupo, '📌')
 
-styled_table = tabela.style.map(colorir_status, subset=['Status'])
-st.write(styled_table)
+    st.markdown(f"""
+    <div style='background-color:{cor};padding:14px 20px;border-radius:8px;margin-top:16px;margin-bottom:10px;'>
+        <h3 style='color:white;margin:0;'>{icone} {status_grupo} ({len(grupo_df)})</h3>
+    </div>
+    """, unsafe_allow_html=True)
+
+    for _, row in grupo_df.sort_values('numero').iterrows():
+        tipo_txt = row['tipo'] if pd.notna(row['tipo']) else '—'
+
+        if row['estagnada']:
+            rastreio = f"⚠️ **Sem atualização há {int(row['dias_sem_atualizacao'])} dias** (última: {row['atualizado_por'] or '—'})" if pd.notna(row['dias_sem_atualizacao']) else "⚠️ **Nunca foi atualizada**"
+        else:
+            rastreio = f"🕒 Atualizado em {row['atualizado_em_fmt']} por **{row['atualizado_por'] or '—'}**"
+
+        with st.container(border=True):
+            st.markdown(
+                f"**#{row['numero']} — {row['responsavel']}** | Prazo: {row['prazo_fmt']} | Tipo: *{tipo_txt}*"
+            )
+            st.markdown(f"📌 {row['problema_identificado']}")
+            if pd.notna(row['plano_de_acao']) and str(row['plano_de_acao']).strip():
+                st.markdown(f"🔄 {row['plano_de_acao']}")
+            if pd.notna(row['comentario']) and str(row['comentario']).strip():
+                st.caption(f"💬 {row['comentario']}")
+            st.caption(rastreio)
 
 st.divider()
-
-STATUS_OPCOES = ['Em andamento', 'Atrasado', 'Concluído']
-TIPO_OPCOES = ['Investigação/Acompanhamento', 'Antigo', 'Sistema', 'Melhoria de Processo']
 
 # ── Criar nova ação ────────────────────────────────────────────────
 st.subheader('➕ Criar Nova Ação')
@@ -262,7 +291,7 @@ escolha = st.selectbox('Selecione a ação', ['—'] + opcoes.tolist())
 if escolha != '—':
     acao_id = mapa_opcoes[escolha]
     linha = df[df['id'] == acao_id].iloc[0]
-    status_atual = linha.get('status') or linha.get('status_calc')
+    status_atual = linha['status_exibicao']
     tipo_atual = linha.get('tipo')
 
     with st.form('form_editar'):
@@ -318,9 +347,9 @@ if escolha != '—':
 st.divider()
 
 # ── Alertas de ações atrasadas ───────────────────────────────────
-atrasadas_df = df[df['status_calc'] == 'Atrasado'].sort_values('dias_atraso_calc', ascending=False)
+atrasadas_df = df[df['dias_atraso_calc'].notna()].sort_values('dias_atraso_calc', ascending=False)
 if len(atrasadas_df) > 0:
-    st.subheader('🚨 Ações Atrasadas')
+    st.subheader('🚨 Ações com Prazo Vencido')
     for _, row in atrasadas_df.iterrows():
         st.error(
             f"**#{row['numero']} | {row['responsavel']}** — "
@@ -328,7 +357,7 @@ if len(atrasadas_df) > 0:
             f"| Prazo: {row['prazo_fmt']} | **{int(row['dias_atraso_calc'])} dias de atraso**"
         )
 
-# ── Alertas de ações estagnadas (novo) ────────────────────────────
+# ── Alertas de ações estagnadas ────────────────────────────────────
 estagnadas_df = df[df['estagnada']].sort_values('dias_sem_atualizacao', ascending=False, na_position='first')
 if len(estagnadas_df) > 0:
     st.subheader(f'🕒 Ações Estagnadas (sem atualização há {DIAS_ESTAGNACAO}+ dias)')
