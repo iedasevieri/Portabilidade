@@ -36,7 +36,7 @@ def carregar_dados():
 
     df['prazo'] = pd.to_datetime(df['prazo'], errors='coerce')
     df['data_finalizacao'] = pd.to_datetime(df['data_finalizacao'], errors='coerce')
-    df['atualizado_em'] = pd.to_datetime(df['atualizado_em'], errors='coerce')
+    df['atualizado_em'] = pd.to_datetime(df['atualizado_em'], errors='coerce', utc=True).dt.tz_localize(None)
 
     def calcular_status(row):
         if pd.notna(row['data_finalizacao']):
