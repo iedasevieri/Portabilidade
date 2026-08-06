@@ -49,7 +49,7 @@ def calcular_status(row):
     return df
 
 df = carregar_dados()
-st.write(df[['Número','Responsável','Prazo','Data Finalização','Status']])
+# st.write(df[['Número','Responsável','Prazo','Data Finalização','Status']])
 # ── Header ──────────────────────────────────────────────────────
 st.markdown("""
 <div style='background-color:#CC0000;padding:16px 24px;border-radius:10px;margin-bottom:20px;'>
