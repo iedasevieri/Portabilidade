@@ -10,7 +10,6 @@ st.set_page_config(
     page_icon='📋',
     layout='wide'
 )
-
 # ── Carregar dados ──────────────────────────────────────────────
 @st.cache_data(ttl=300)
 def carregar_dados():
@@ -22,7 +21,7 @@ def carregar_dados():
     def calcular_status(row):
         if pd.notna(row['Data Finalização']):
             return 'Concluído'
-        elif pd.notna(row['Prazo']) and row['Prazo'] < hoje:
+        elif pd.notna(row['Prazo']) < hoje:
             return 'Atrasado'
         else:
             return 'Em andamento'
@@ -36,16 +35,10 @@ def carregar_dados():
         return None
 
     df['Dias Atraso'] = df.apply(calcular_atraso, axis=1)
-
     df['Prazo_fmt'] = df['Prazo'].dt.strftime('%d/%m/%Y')
-    df['Data Finalização_fmt'] = (
-        df['Data Finalização']
-        .dt.strftime('%d/%m/%Y')
-        .fillna('—')
-    )
+    df['Data Finalização_fmt'] = df['Data Finalização'].dt.strftime('%d/%m/%Y').fillna('—')
 
     return df
-
 
 df = carregar_dados()
 
