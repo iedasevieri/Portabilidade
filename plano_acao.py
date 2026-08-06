@@ -23,18 +23,12 @@ st.write(df.columns.tolist())
     # Recalcula status automaticamente
     # Recalcula status automaticamente
 def calcular_status(row):
-
     if pd.notna(row['Data Finalização']):
         return 'Concluído'
-
-    if pd.notna(row['Prazo']) and row['Prazo'] < hoje:
-
-        if pd.notna(row['Observação']) and str(row['Observação']).strip():
-            return 'Atrasado c/ atualização'
-
+    elif pd.notna(row['Prazo']) and row['Prazo'] < hoje:
         return 'Atrasado'
-
-    return 'Em andamento'
+    else:
+        return 'Em andamento''
 
     df['Status'] = df.apply(calcular_status, axis=1)
 
