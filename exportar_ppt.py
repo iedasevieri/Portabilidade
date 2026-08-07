@@ -157,19 +157,20 @@ def gerar_ppt(template_path, df_filtrado, filtros_texto, saida_path):
                 Inches(0.2),
                 Inches(6),
                 Inches(0.4)
+                        titulo.text_frame.text = (
+                f"Ações {status} ({pagina+1}/{paginas})"
             )
 
-            titulo.text_frame.text = (
-    f"Ações {status} ({pagina+1}/{paginas})"
-)
-
-for p in titulo.text_frame.paragraphs:
-    for run in p.runs:
-        run.font.name = "AMX"
-        run.font.size = Pt(18)
-        run.font.bold = True
+            for p in titulo.text_frame.paragraphs:
+                for run in p.runs:
+                    run.font.name = "AMX"
+                    run.font.size = Pt(18)
+                    run.font.bold = True
 
             inicio = pagina * linhas_por_slide
+            fim = inicio + linhas_por_slide
+
+        
             fim = inicio + linhas_por_slide
 
             df_pagina = df_status.iloc[inicio:fim]
