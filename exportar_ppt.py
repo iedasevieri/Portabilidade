@@ -131,7 +131,7 @@ def gerar_ppt(template_path, df_filtrado, filtros_texto, saida_path):
         "Concluído"
     ]
 
-    linhas_por_slide = 8
+    linhas_por_slide = 5
 
     for status in status_ordem:
 
@@ -160,8 +160,14 @@ def gerar_ppt(template_path, df_filtrado, filtros_texto, saida_path):
             )
 
             titulo.text_frame.text = (
-                f"Ações {status} ({pagina+1}/{paginas})"
-            )
+    f"Ações {status} ({pagina+1}/{paginas})"
+)
+
+for p in titulo.text_frame.paragraphs:
+    for run in p.runs:
+        run.font.name = "AMX"
+        run.font.size = Pt(18)
+        run.font.bold = True
 
             inicio = pagina * linhas_por_slide
             fim = inicio + linhas_por_slide
@@ -223,8 +229,8 @@ def gerar_ppt(template_path, df_filtrado, filtros_texto, saida_path):
                 valores = [
                     str(row["numero"]),
                     str(row["tipo"]),
-                    str(row["problema_identificado"])[:120],
-                    str(row["plano_de_acao"])[:120],
+                    str(row["problema_identificado"])[:50],
+                    str(row["plano_de_acao"])[:50],
                     str(row["status_exibicao"]),
                     str(row["atualizado_em_fmt"])
                 ]
