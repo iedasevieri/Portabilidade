@@ -181,7 +181,7 @@ if data_fim is not None:
 
 st.caption(f'Exibindo {len(df_filtrado)} de {len(df)} ações')
 
-with st.expander('📤 Exportar PPT (modelo Uotz)'):
+with st.expander('📤 Exportar PPT'):
     st.caption('Gera uma apresentação com capa, resumo (cards + gráfico) e tabela detalhada, usando os filtros aplicados acima.')
     if st.button('Gerar apresentação'):
         with st.spinner('Gerando PPT...'):
@@ -199,7 +199,7 @@ with st.expander('📤 Exportar PPT (modelo Uotz)'):
             filtros_texto = ' · '.join(partes_filtro) if partes_filtro else 'Todas as ações'
 
             saida = '/tmp/plano_acao_export.pptx'
-            gerar_ppt('template_uotz_2026.pptx', df_filtrado, filtros_texto, saida)
+            gerar_ppt(None, df_filtrado, filtros_texto, saida)
 
             with open(saida, 'rb') as f:
                 st.download_button(
