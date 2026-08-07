@@ -32,6 +32,13 @@ COR_STATUS = {
 }
 
 
+def remover_logo_uotz(slide):
+    """Remove o logo circular da uotz do cabeçalho de um slide, se presente."""
+    for shape in list(slide.shapes):
+        if shape.shape_type == 13 and shape.name == 'Google Shape;137;p62':
+            shape._element.getparent().remove(shape._element)
+
+
 def duplicate_slide(prs, index):
     source = prs.slides[index]
     layout = source.slide_layout
@@ -110,9 +117,15 @@ def gerar_ppt(template_path, df_filtrado, filtros_texto, saida_path):
     lorem_shape = next((s for s in capa.shapes if s.has_text_frame and 'Resumo da apresentação' in s.text_frame.text), None)
     if lorem_shape is not None:
         lorem_shape._element.getparent().remove(lorem_shape._element)
+    # remove elementos de marca da uotz (marca-d'água "Z" e logo circular)
+    for shape in list(capa.shapes):
+        if shape.shape_type == 13 and shape.name in ('Imagem 19', 'Imagem 21'):
+            shape._element.getparent().remove(shape._element)
+    remover_logo_uotz(capa)
 
     # ── Resumo ────────────────────────────────────────────────────
     resumo = duplicate_slide(prs, IDX_RESUMO_BASE)
+    remover_logo_uotz(resumo)
     titulo_resumo = next(s for s in resumo.shapes if s.name == 'Google Shape;121;p13')
     set_text(titulo_resumo, 'Resumo | Plano de Ação')
     sub_resumo = next((s for s in resumo.shapes if s.has_text_frame and s.text_frame.text.strip() == 'xxxxxxxx'), None)
@@ -218,6 +231,7 @@ def gerar_ppt(template_path, df_filtrado, filtros_texto, saida_path):
 
     for pagina_i, pagina_df in enumerate(paginas):
         tabela_slide = duplicate_slide(prs, IDX_TABELA_BASE)
+        remover_logo_uotz(tabela_slide)
         titulo_tab = next(s for s in tabela_slide.shapes if s.name == 'Google Shape;121;p13')
         sufixo = f' ({pagina_i + 1}/{len(paginas)})' if len(paginas) > 1 else ''
         set_text(titulo_tab, f'Plano de Ação — Detalhado{sufixo}')
@@ -284,7 +298,7 @@ def gerar_ppt(template_path, df_filtrado, filtros_texto, saida_path):
                         run.font.size = Pt(8)
 
     # ── Fechamento ────────────────────────────────────────────────
-    duplicate_slide(prs, IDX_FECHAMENTO)
+    # (slide de fechamento do template é 100% marca uotz — não incluído)
 
     # remove os slides originais de exemplo do template
     xml_slides = prs.slides._sldIdLst
