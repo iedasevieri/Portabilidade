@@ -173,12 +173,16 @@ def gerar_ppt(template_path, df_filtrado, filtros_texto, saida_path):
 
             df_pagina = df_status.iloc[inicio:fim]
 
+            largura_tabela = Inches(9.5)
+            largura_slide = prs.slide_width
+            left_centralizado = int((largura_slide - largura_tabela) / 2)
+
             tabela = slide.shapes.add_table(
                 len(df_pagina) + 1,
                 6,
-                Inches(0.15),
+                left_centralizado,
                 Inches(0.8),
-                Inches(9.5),
+                largura_tabela,
                 Inches(4.5)
             ).table
 
