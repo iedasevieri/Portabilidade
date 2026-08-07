@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import datetime, date
 import plotly.express as px
 from supabase import create_client, Client
-from exportar_ppt import gerar_ppt
+from Exportar_ppt import gerar_ppt
 
 # ── Configuração da página ──────────────────────────────────────
 st.set_page_config(
