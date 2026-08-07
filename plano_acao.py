@@ -181,7 +181,7 @@ if data_fim is not None:
 
 st.caption(f'Exibindo {len(df_filtrado)} de {len(df)} ações')
 
-with st.expander('📤 Exportar PPT'):
+with st.expander('📤 Exportar PPT (modelo Uotz)'):
     st.caption('Gera uma apresentação com capa, resumo (cards + gráfico) e tabela detalhada, usando os filtros aplicados acima.')
     if st.button('Gerar apresentação'):
         with st.spinner('Gerando PPT...'):
@@ -403,6 +403,15 @@ else:
                     st.success('Ação atualizada com sucesso!')
                     st.cache_data.clear()
                     st.rerun()
+
+        with st.expander('🗑️ Excluir esta ação'):
+            st.warning(f"Isso vai apagar permanentemente a ação #{linha['numero']} — {linha['responsavel']}. Não tem como desfazer.")
+            confirmar = st.checkbox('Sim, quero excluir essa ação permanentemente', key=f'confirmar_exclusao_{acao_id}')
+            if st.button('🗑️ Excluir definitivamente', disabled=not confirmar):
+                supabase.table(TABELA).delete().eq('id', acao_id).execute()
+                st.success('Ação excluída.')
+                st.cache_data.clear()
+                st.rerun()
 
 st.divider()
 
