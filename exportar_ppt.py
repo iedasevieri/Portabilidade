@@ -8,25 +8,25 @@ from pptx.dml.color import RGBColor
 
 
 COR_VERMELHO = RGBColor(192, 0, 0)
-COR_VERDE = RGBColor(76, 175, 80)
-COR_LARANJA = RGBColor(255, 152, 0)
-COR_CINZA = RGBColor(100, 100, 100)
+COR_VERDE = RGBColor(112, 173, 71)
+COR_LARANJA = RGBColor(244, 177, 131)
+COR_CINZA = RGBColor(127, 127, 127)
 
 
 def gerar_ppt(template_path, df_filtrado, filtros_texto, saida_path):
 
     prs = Presentation()
 
-    # ==================================================
+    # ==========================================
     # CAPA
-    # ==================================================
+    # ==========================================
 
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 
     titulo = slide.shapes.add_textbox(
         Inches(1),
-        Inches(1.5),
-        Inches(8),
+        Inches(1.3),
+        Inches(7),
         Inches(1)
     )
 
@@ -35,12 +35,11 @@ def gerar_ppt(template_path, df_filtrado, filtros_texto, saida_path):
     p = titulo.text_frame.paragraphs[0]
     p.font.size = Pt(28)
     p.font.bold = True
-    p.font.color.rgb = COR_VERMELHO
 
     sub = slide.shapes.add_textbox(
         Inches(1),
         Inches(3),
-        Inches(6),
+        Inches(5),
         Inches(0.5)
     )
 
@@ -48,9 +47,9 @@ def gerar_ppt(template_path, df_filtrado, filtros_texto, saida_path):
         f"Gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')}"
     )
 
-    # ==================================================
+    # ==========================================
     # RESUMO
-    # ==================================================
+    # ==========================================
 
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 
@@ -58,12 +57,13 @@ def gerar_ppt(template_path, df_filtrado, filtros_texto, saida_path):
         Inches(0.3),
         Inches(0.2),
         Inches(5),
-        Inches(0.4)
+        Inches(0.5)
     )
 
     titulo.text_frame.text = "Resumo Executivo"
 
     total = len(df_filtrado)
+
     concluidas = len(
         df_filtrado[
             df_filtrado["status_exibicao"] == "Concluído"
@@ -82,7 +82,9 @@ def gerar_ppt(template_path, df_filtrado, filtros_texto, saida_path):
         ]
     )
 
-    estagnadas = int(df_filtrado["estagnada"].sum())
+    estagnadas = int(
+        df_filtrado["estagnada"].sum()
+    ) if len(df_filtrado) > 0 else 0
 
     taxa = (
         round(concluidas / total * 100, 1)
@@ -98,15 +100,14 @@ def gerar_ppt(template_path, df_filtrado, filtros_texto, saida_path):
         ("Taxa", f"{taxa}%", COR_VERMELHO),
     ]
 
-    inicio_x = 0.3
-    largura = 1.4
+    for i, (nome, valor, cor) in enumerate(cards):
 
-    for i, (titulo_card, valor, cor) in enumerate(cards):
+        x = 0.3 + (i * 1.55)
 
         card = slide.shapes.add_textbox(
-            Inches(inicio_x + (i * 1.5)),
+            Inches(x),
             Inches(1),
-            Inches(largura),
+            Inches(1.4),
             Inches(0.8)
         )
 
@@ -114,93 +115,109 @@ def gerar_ppt(template_path, df_filtrado, filtros_texto, saida_path):
         card.fill.fore_color.rgb = cor
 
         tf = card.text_frame
-        tf.text = f"{valor}\n{titulo_card}"
+        tf.text = f"{valor}\n{nome}"
 
-    # ==================================================
-    # TABELAS
-    # ==================================================
+    # ==========================================
+    # DETALHAMENTO POR STATUS
+    # ==========================================
 
-    linhas_por_slide = 10
+    status_ordem = [
+        "Atrasado",
+        "Em andamento",
+        "Concluído"
+    ]
 
-    paginas = math.ceil(
-        max(len(df_filtrado), 1) / linhas_por_slide
-    )
+    linhas_por_slide = 8
 
-    for pagina in range(paginas):
+    for status in status_ordem:
 
-        slide = prs.slides.add_slide(
-            prs.slide_layouts[6]
+        df_status = df_filtrado[
+            df_filtrado["status_exibicao"] == status
+        ].copy()
+
+        if len(df_status) == 0:
+            continue
+
+        paginas = math.ceil(
+            len(df_status) / linhas_por_slide
         )
 
-        titulo = slide.shapes.add_textbox(
-            Inches(0.3),
-            Inches(0.2),
-            Inches(5),
-            Inches(0.4)
-        )
+        for pagina in range(paginas):
 
-        titulo.text_frame.text = (
-            f"Plano de Ação - Detalhado "
-            f"({pagina+1}/{paginas})"
-        )
-
-        inicio = pagina * linhas_por_slide
-        fim = inicio + linhas_por_slide
-
-        df_pagina = df_filtrado.iloc[inicio:fim]
-
-        rows = len(df_pagina) + 1
-        cols = 6
-
-        tabela = slide.shapes.add_table(
-            rows,
-            cols,
-            Inches(0.2),
-            Inches(1),
-            Inches(9),
-            Inches(4)
-        ).table
-
-        headers = [
-            "Número",
-            "Tipo",
-            "Problema",
-            "Plano de Ação",
-            "Status",
-            "Última Atualização"
-        ]
-
-        for c, h in enumerate(headers):
-            tabela.cell(0, c).text = h
-
-        for r, (_, row) in enumerate(
-            df_pagina.iterrows(),
-            start=1
-        ):
-
-            tabela.cell(r, 0).text = str(
-                row["numero"]
+            slide = prs.slides.add_slide(
+                prs.slide_layouts[6]
             )
 
-            tabela.cell(r, 1).text = str(
-                row["tipo"]
+            titulo = slide.shapes.add_textbox(
+                Inches(0.3),
+                Inches(0.2),
+                Inches(8),
+                Inches(0.4)
             )
 
-            tabela.cell(r, 2).text = str(
-                row["problema_identificado"]
-            )[:100]
-
-            tabela.cell(r, 3).text = str(
-                row["plano_de_acao"]
-            )[:100]
-
-            tabela.cell(r, 4).text = str(
-                row["status_exibicao"]
+            titulo.text_frame.text = (
+                f"Ações {status} "
+                f"({pagina + 1}/{paginas})"
             )
 
-            tabela.cell(r, 5).text = str(
-                row["atualizado_em_fmt"]
-            )
+            inicio = pagina * linhas_por_slide
+            fim = inicio + linhas_por_slide
+
+            df_pagina = df_status.iloc[inicio:fim]
+
+            tabela = slide.shapes.add_table(
+                len(df_pagina) + 1,
+                6,
+                Inches(0.2),
+                Inches(0.8),
+                Inches(9.2),
+                Inches(4.5)
+            ).table
+
+            headers = [
+                "Número",
+                "Tipo",
+                "Problema",
+                "Plano de Ação",
+                "Status",
+                "Última Atualização"
+            ]
+
+            for c, h in enumerate(headers):
+
+                tabela.cell(0, c).text = h
+
+                tabela.cell(0, c).fill.solid()
+                tabela.cell(0, c).fill.fore_color.rgb = COR_VERMELHO
+
+            for r, (_, row) in enumerate(
+                df_pagina.iterrows(),
+                start=1
+            ):
+
+                tabela.cell(r, 0).text = str(
+                    row["numero"]
+                )
+
+                tabela.cell(r, 1).text = str(
+                    row["tipo"]
+                )
+
+                tabela.cell(r, 2).text = str(
+                    row["problema_identificado"]
+                )[:80]
+
+                tabela.cell(r, 3).text = str(
+                    row["plano_de_acao"]
+                )[:80]
+
+                tabela.cell(r, 4).text = str(
+                    row["status_exibicao"]
+                )
+
+                tabela.cell(r, 5).text = str(
+                    row["atualizado_em_fmt"]
+                )
 
     prs.save(saida_path)
 
