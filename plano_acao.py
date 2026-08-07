@@ -181,7 +181,7 @@ if data_fim is not None:
 
 st.caption(f'Exibindo {len(df_filtrado)} de {len(df)} ações')
 
-with st.expander('📤 Exportar PPT (modelo Uotz)'):
+with st.expander('📤 Exportar PPT'):
     st.caption('Gera uma apresentação com capa, resumo (cards + gráfico) e tabela detalhada, usando os filtros aplicados acima.')
     if st.button('Gerar apresentação'):
         with st.spinner('Gerando PPT...'):
