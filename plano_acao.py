@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime, date
 import plotly.express as px
 from supabase import create_client, Client
+from exportar_ppt import gerar_ppt
 
 # ── Configuração da página ──────────────────────────────────────
 st.set_page_config(
@@ -179,6 +180,34 @@ if data_fim is not None:
     df_filtrado = df_filtrado[df_filtrado['prazo'] <= pd.Timestamp(data_fim)]
 
 st.caption(f'Exibindo {len(df_filtrado)} de {len(df)} ações')
+
+with st.expander('📤 Exportar PPT (modelo Uotz)'):
+    st.caption('Gera uma apresentação com capa, resumo (cards + gráfico) e tabela detalhada, usando os filtros aplicados acima.')
+    if st.button('Gerar apresentação'):
+        with st.spinner('Gerando PPT...'):
+            partes_filtro = []
+            if filtro_resp != 'Todos':
+                partes_filtro.append(f'Responsável: {filtro_resp}')
+            if filtro_status != 'Todos':
+                partes_filtro.append(f'Status: {filtro_status}')
+            if filtro_tipo != 'Todos':
+                partes_filtro.append(f'Tipo: {filtro_tipo}')
+            if filtro_periodo != 'Todos':
+                partes_filtro.append(f'Período: {filtro_periodo}')
+            if busca:
+                partes_filtro.append(f'Busca: "{busca}"')
+            filtros_texto = ' · '.join(partes_filtro) if partes_filtro else 'Todas as ações'
+
+            saida = '/tmp/plano_acao_export.pptx'
+            gerar_ppt('template_uotz_2026.pptx', df_filtrado, filtros_texto, saida)
+
+            with open(saida, 'rb') as f:
+                st.download_button(
+                    '⬇️ Baixar PPT',
+                    data=f.read(),
+                    file_name=f'Plano_de_Acao_Portabilidade_{date.today().strftime("%Y%m%d")}.pptx',
+                    mime='application/vnd.openxmlformats-officedocument.presentationml.presentation'
+                )
 
 st.divider()
 
@@ -376,17 +405,6 @@ else:
                     st.rerun()
 
 st.divider()
-
-# ── Alertas de ações atrasadas ───────────────────────────────────
-atrasadas_df = df[df['dias_atraso_calc'].notna()].sort_values('dias_atraso_calc', ascending=False)
-if len(atrasadas_df) > 0:
-    st.subheader('🚨 Ações com Prazo Vencido')
-    for _, row in atrasadas_df.iterrows():
-        st.error(
-            f"**#{row['numero']} | {row['responsavel']}** — "
-            f"{str(row['problema_identificado'])[:80]}... "
-            f"| Prazo: {row['prazo_fmt']} | **{int(row['dias_atraso_calc'])} dias de atraso**"
-        )
 
 # ── Alertas de ações estagnadas ────────────────────────────────────
 estagnadas_df = df[df['estagnada']].sort_values('dias_sem_atualizacao', ascending=False, na_position='first')
