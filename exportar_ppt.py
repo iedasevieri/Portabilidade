@@ -157,6 +157,7 @@ def gerar_ppt(template_path, df_filtrado, filtros_texto, saida_path):
                 Inches(0.2),
                 Inches(6),
                 Inches(0.4)
+            )
                         titulo.text_frame.text = (
                 f"Ações {status} ({pagina+1}/{paginas})"
             )
