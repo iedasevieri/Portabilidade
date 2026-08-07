@@ -111,7 +111,7 @@ def gerar_ppt(template_path, df_filtrado, filtros_texto, saida_path):
     # ── Capa ──────────────────────────────────────────────────────
     capa = duplicate_slide(prs, IDX_TITULO)
     titulo_shape = next(s for s in capa.shapes if s.has_text_frame and 'Título da Apresentação' in s.text_frame.text)
-    set_text(titulo_shape, 'Plano de Ação — Portabilidade')
+    set_text(titulo_shape, 'Plano de Ação - Portabilidade')
     sub_shape = next(s for s in capa.shapes if s.has_text_frame and 'Subtítulo' in s.text_frame.text)
     set_text(sub_shape, f'Gerado em {datetime.now().strftime("%d/%m/%Y %H:%M")} · {filtros_texto}')
     lorem_shape = next((s for s in capa.shapes if s.has_text_frame and 'Resumo da apresentação' in s.text_frame.text), None)
