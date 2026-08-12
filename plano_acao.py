@@ -247,11 +247,35 @@ with col_g1:
     st.plotly_chart(fig1, use_container_width=True)
 
 with col_g2:
-    st.subheader('Top 10 Responsáveis por Ações')
-    top_resp = df_filtrado.groupby('responsavel').size().sort_values(ascending=True).tail(10)
-    fig2 = px.bar(top_resp, orientation='h', color_discrete_sequence=['#CC0000'])
-    fig2.update_layout(margin=dict(t=10, b=10), xaxis_title='Qtde de Ações',
-                        yaxis_title='', showlegend=False)
+    st.subheader('Ações por Tipo e Status')
+
+    grafico_tipo_status = (
+        df_filtrado
+        .groupby(['tipo', 'status_exibicao'])
+        .size()
+        .reset_index(name='Quantidade')
+    )
+
+    fig2 = px.bar(
+        grafico_tipo_status,
+        x='tipo',
+        y='Quantidade',
+        color='status_exibicao',
+        barmode='group',
+        color_discrete_map={
+            'Concluído': '#2E7D32',      # Verde
+            'Em andamento': '#F9A825',  # Amarelo
+            'Atrasado': '#C62828'       # Vermelho
+        }
+    )
+
+    fig2.update_layout(
+        margin=dict(t=10, b=10),
+        xaxis_title='Tipo',
+        yaxis_title='Quantidade',
+        legend_title='Status'
+    )
+
     st.plotly_chart(fig2, use_container_width=True)
 
 st.divider()
