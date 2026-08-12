@@ -83,6 +83,10 @@ def carregar_dados():
         return None
 
     df['dias_atraso_calc'] = df.apply(calcular_atraso, axis=1)
+    df['dias_atraso_calc'] = pd.to_numeric(
+    df['dias_atraso_calc'],
+    errors='coerce'
+).astype('Int64')
 
     # Dias sem atualização (rastreabilidade)
     def dias_sem_atualizacao(row):
