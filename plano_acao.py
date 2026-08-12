@@ -282,7 +282,19 @@ tabela = df_filtrado[[
 
 styled_table = tabela.style.map(colorir_status, subset=['Status'])
 st.write(styled_table)
+import io
 
+buffer = io.BytesIO()
+
+with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+    tabela.to_excel(writer, index=False, sheet_name="Acoes Detalhadas")
+
+st.download_button(
+    label="📥 Baixar Excel",
+    data=buffer.getvalue(),
+    file_name="acoes_detalhadas.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
 st.divider()
 
 # ── Criar nova ação ────────────────────────────────────────────────
