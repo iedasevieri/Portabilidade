@@ -38,12 +38,26 @@ STATUS_CORES = {'Em andamento': '#FF9800', 'Atrasado': '#CC0000', 'Concluído': 
 STATUS_ICONES = {'Em andamento': '🔄', 'Atrasado': '🚨', 'Concluído': '✅'}
 
 
+def _nativo(v):
+    """Converte tipos do pandas/numpy (ex.: numpy.int64) para tipos nativos do Python.
+    Sem isso, o cliente do Supabase não consegue serializar o valor em JSON e o insert falha
+    com TypeError — é o que acontecia ao gravar o histórico com o id vindo do DataFrame."""
+    if v is None:
+        return None
+    if hasattr(v, "item"):
+        try:
+            return v.item()
+        except Exception:
+            return v
+    return v
+
+
 def registrar_historico(acao_id, tipo_evento, alterado_por, acao_numero=None, acao_resumo=None,
                          status_anterior=None, status_novo=None, comentario=None):
     """Grava um evento na tabela de histórico/auditoria (nunca sobrescreve — sempre insere uma linha nova)."""
     supabase.table(TABELA_HIST).insert({
-        'acao_id': acao_id,
-        'acao_numero': acao_numero,
+        'acao_id': _nativo(acao_id),
+        'acao_numero': _nativo(acao_numero),
         'acao_resumo': (acao_resumo or '')[:120] if acao_resumo else None,
         'tipo_evento': tipo_evento,  # 'criacao' | 'atualizacao' | 'exclusao'
         'status_anterior': status_anterior,
@@ -549,7 +563,7 @@ else:
     escolha = st.selectbox('Selecione a ação', ['—'] + opcoes.tolist())
 
     if escolha != '—':
-        acao_id = mapa_opcoes[escolha]
+        acao_id = _nativo(mapa_opcoes[escolha])  # id nativo do Python, não numpy.int64
         linha = df[df['id'] == acao_id].iloc[0]
         status_atual = linha['status_exibicao']
         tipo_atual = linha.get('tipo')
