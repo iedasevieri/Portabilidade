@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, date, timedelta
+from datetime import datetime, date
 import plotly.express as px
 from supabase import create_client, Client
 from exportar_ppt import gerar_ppt
@@ -22,71 +22,13 @@ def get_supabase() -> Client:
 supabase = get_supabase()
 
 TABELA = "plano_acao"
-TABELA_ACOMP = "acompanhamento_semanal"
+TABELA_TIMELINE = "timeline_eventos"
+TABELA_HIST = "historico_acoes"
 DIAS_ESTAGNACAO = 7  # dias sem atualização para virar alerta
 
-# ── Timeline (fixo no código — atualizar manualmente conforme novos marcos) ──
-TIMELINE_EVENTOS = {
-    "Maio": [
-        {
-            "data": "06/05/2026",
-            "titulo": "Instabilidade sistêmica SAP",
-            "corpo": (
-                "Após migração do SAP, houve abertura recorrente de CCARDs de erro "
-                "para validação de inconsistências sistêmicas, com impacto direto nas vendas.\n\n"
-                "Foi destacado que, apesar da efetivação da venda, não havia visibilidade por canal, "
-                "impossibilitando o reflexo correto para os times comerciais.\n\n"
-                "Em acompanhamento por Amanda e Cícera."
-            ),
-        },
-    ],
-    "Junho": [
-        {
-            "data": "01/06/2026",
-            "titulo": "Portabilidade Indevida — Flex",
-            "corpo": (
-                "Aumento de reclamações relacionadas à sobreposição de números, principalmente "
-                "em clientes multilinhas, com perda de linhas ativas.\n\n"
-                "**Tratativa em andamento:** Ajuste no app (Flex). Implementação de pop-up/alerta "
-                "de confirmação na jornada de portabilidade, com bloqueio para inconsistências "
-                "(ex: número já ativo).\n\n"
-                "- **Previsão de implantação:** 30/06/26\n"
-                "- **Previsão de correção postergada para 15/09**, pois em 18/08 entrará em produção "
-                "o Novo Plano Flex, não pode subir em produção em conjunto."
-            ),
-        },
-        {
-            "data": "06/06/2026",
-            "titulo": "Portin interno Nucel > Claro — Não ativo na Claro",
-            "corpo": (
-                "Identificação de linhas portadas que não estavam ativas corretamente na base Claro, "
-                "assim o cliente portado estava ficando sem serviço.\n\n"
-                "**Tratativas:**\n"
-                "1. Ajustar a implementação do canal SMS 1970 para garantir a validação do chip Claro "
-                "no fluxo de portabilidade — **implementado dia 25/06/26**\n"
-                "2. Criar job de suspensão para solucionar linhas sem serviço:\n"
-                "   - Job de suspensão previsto para 27/06\n"
-                "   - Job de suspensão postergado para o dia 04/07. Decisão executiva, devido a alguns "
-                "incidentes que ocorreram no MVNO.\n"
-                "   - Job de suspensão: Implantação 06/07\n"
-                "   - Job de suspensão desligado dia 16/07, pois não estava gerando protocolo no PS8. "
-                "Precisa aguardar correção do PS8 para gerar protocolo de conflito. Além disso, alguns "
-                "casos não chegam a concluir a portabilidade, devido à falta de estrutura."
-            ),
-        },
-        {
-            "data": "09/06/2026",
-            "titulo": "Template envio WhatsApp para aceite do SMS",
-            "corpo": (
-                "**28/05/2026:** Criação de novo Template para aceite do SMS.\n\n"
-                "**09/06/2026:** Relatórios de disparo de SMS estavam vindo zerados ou sem dados. "
-                "O time Blip confirmou que não há registro de disparos dos novos templates no período, "
-                "indicando possível falha na execução da jornada ou integração entre sistemas, com "
-                "risco de impacto na conversão da portabilidade.\n\n"
-                "**Implementação dia 28/06.**"
-            ),
-        },
-    ],
+MESES_PT = {
+    1: 'Janeiro', 2: 'Fevereiro', 3: 'Março', 4: 'Abril', 5: 'Maio', 6: 'Junho',
+    7: 'Julho', 8: 'Agosto', 9: 'Setembro', 10: 'Outubro', 11: 'Novembro', 12: 'Dezembro'
 }
 
 STATUS_OPCOES = ['Em andamento', 'Atrasado', 'Concluído']
@@ -94,6 +36,23 @@ TIPO_OPCOES = ['Investigação/Acompanhamento', 'Antigo', 'Sistema', 'Melhoria d
 
 STATUS_CORES = {'Em andamento': '#FF9800', 'Atrasado': '#CC0000', 'Concluído': '#4CAF50'}
 STATUS_ICONES = {'Em andamento': '🔄', 'Atrasado': '🚨', 'Concluído': '✅'}
+
+
+def registrar_historico(acao_id, tipo_evento, alterado_por, acao_numero=None, acao_resumo=None,
+                         status_anterior=None, status_novo=None, comentario=None):
+    """Grava um evento na tabela de histórico/auditoria (nunca sobrescreve — sempre insere uma linha nova)."""
+    supabase.table(TABELA_HIST).insert({
+        'acao_id': acao_id,
+        'acao_numero': acao_numero,
+        'acao_resumo': (acao_resumo or '')[:120] if acao_resumo else None,
+        'tipo_evento': tipo_evento,  # 'criacao' | 'atualizacao' | 'exclusao'
+        'status_anterior': status_anterior,
+        'status_novo': status_novo,
+        'comentario': (comentario or '').strip() or None,
+        'alterado_por': alterado_por,
+        'alterado_em': datetime.now().isoformat(),
+    }).execute()
+
 
 # ── Carregar dados ──────────────────────────────────────────────
 @st.cache_data(ttl=60)
@@ -149,9 +108,9 @@ def carregar_dados():
 
     df['dias_atraso_calc'] = df.apply(calcular_atraso, axis=1)
     df['dias_atraso_calc'] = pd.to_numeric(
-    df['dias_atraso_calc'],
-    errors='coerce'
-).astype('Int64')
+        df['dias_atraso_calc'],
+        errors='coerce'
+    ).astype('Int64')
 
     # Dias sem atualização (rastreabilidade)
     def dias_sem_atualizacao(row):
@@ -171,6 +130,8 @@ def carregar_dados():
 
     if 'tipo' not in df.columns:
         df['tipo'] = None
+    if 'comentario' not in df.columns:
+        df['comentario'] = None
 
     df['prazo_fmt'] = df['prazo'].dt.strftime('%d/%m/%Y').fillna('—')
     df['data_finalizacao_fmt'] = df['data_finalizacao'].dt.strftime('%d/%m/%Y').fillna('—')
@@ -178,7 +139,29 @@ def carregar_dados():
 
     return df
 
+
+@st.cache_data(ttl=60)
+def carregar_timeline():
+    """Timeline agora vive no Supabase (tabela timeline_eventos) — antes era um dicionário
+    fixo no código-fonte, o que fazia novos meses dependerem de editar o .py à mão."""
+    resp = supabase.table(TABELA_TIMELINE).select("*").order("data").execute()
+    dft = pd.DataFrame(resp.data)
+    if not dft.empty:
+        dft['data'] = pd.to_datetime(dft['data'], errors='coerce')
+    return dft
+
+
+@st.cache_data(ttl=60)
+def carregar_historico():
+    resp = supabase.table(TABELA_HIST).select("*").order("alterado_em", desc=True).execute()
+    dfh = pd.DataFrame(resp.data)
+    if not dfh.empty:
+        dfh['alterado_em'] = pd.to_datetime(dfh['alterado_em'], errors='coerce', utc=True).dt.tz_localize(None)
+    return dfh
+
+
 df = carregar_dados()
+df_historico = carregar_historico()
 
 # ── Header ──────────────────────────────────────────────────────
 st.markdown("""
@@ -190,105 +173,76 @@ st.markdown("""
 </div>
 """.format(data=datetime.today().strftime('%d/%m/%Y %H:%M')), unsafe_allow_html=True)
 
-# ── Timeline ────────────────────────────────────────────────────
+# ── Timeline (agora vinda do banco — dá pra adicionar mês novo sem mexer no código) ──
 with st.expander('🗓️ Timeline', expanded=True):
     st.markdown(
         "<h1 style='color:#CC0000;font-weight:800;margin:0 0 8px;'>Timeline</h1>"
         "<div style='height:5px;background-color:#CC0000;border-radius:2px;margin-bottom:20px;'></div>",
         unsafe_allow_html=True
     )
-    colunas_meses = st.columns(len(TIMELINE_EVENTOS))
-    for col, (mes, eventos) in zip(colunas_meses, TIMELINE_EVENTOS.items()):
-        with col:
-            st.markdown(
-                f"<div style='text-align:center;font-weight:700;letter-spacing:1px;"
-                f"color:#333;margin-bottom:14px;'>{mes.upper()}</div>",
-                unsafe_allow_html=True
+
+    df_tl = carregar_timeline()
+
+    if df_tl.empty:
+        st.info('Nenhum evento cadastrado na timeline ainda.')
+    else:
+        df_tl = df_tl.dropna(subset=['data']).sort_values('data')
+        df_tl['mes_label'] = df_tl['data'].apply(lambda d: f"{MESES_PT[d.month]}/{d.year}")
+        meses_unicos = df_tl.drop_duplicates('mes_label', keep='first')['mes_label'].tolist()
+
+        abas = st.tabs(meses_unicos)
+        for aba, mes_label in zip(abas, meses_unicos):
+            with aba:
+                eventos_mes = df_tl[df_tl['mes_label'] == mes_label].sort_values('data')
+                for _, ev in eventos_mes.iterrows():
+                    st.markdown(
+                        f"<div style='color:#CC0000;font-size:12px;font-weight:700;margin-bottom:2px;'>"
+                        f"● {ev['data'].strftime('%d/%m/%Y')}</div>",
+                        unsafe_allow_html=True
+                    )
+                    st.markdown(f"**{ev['titulo']}**")
+                    st.markdown(ev['corpo'])
+                    col_esp, col_del = st.columns([6, 1])
+                    with col_del:
+                        if st.button('🗑️ Remover', key=f"del_tl_{ev['id']}"):
+                            supabase.table(TABELA_TIMELINE).delete().eq('id', ev['id']).execute()
+                            st.cache_data.clear()
+                            st.rerun()
+                    st.markdown("<div style='margin-bottom:18px;'></div>", unsafe_allow_html=True)
+
+    with st.expander('➕ Adicionar evento na timeline'):
+        with st.form('form_timeline', clear_on_submit=True):
+            nova_data_tl = st.date_input('Data do evento *', value=date.today())
+            novo_titulo_tl = st.text_input('Título *')
+            novo_corpo_tl = st.text_area(
+                'Descrição *',
+                help='Aceita markdown: **negrito**, listas com "- item", quebras de linha duplas para parágrafo.'
             )
-            for ev in eventos:
-                st.markdown(
-                    f"<div style='color:#CC0000;font-size:12px;font-weight:700;margin-bottom:2px;'>"
-                    f"● {ev['data']}</div>",
-                    unsafe_allow_html=True
-                )
-                st.markdown(f"**{ev['titulo']}**")
-                st.markdown(ev['corpo'])
-                st.markdown("<div style='margin-bottom:22px;'></div>", unsafe_allow_html=True)
+            quem_tl = st.text_input('Seu nome *')
+            enviar_tl = st.form_submit_button('➕ Adicionar evento')
 
-st.divider()
+            if enviar_tl:
+                faltando_tl = []
+                if not novo_titulo_tl.strip():
+                    faltando_tl.append('Título')
+                if not novo_corpo_tl.strip():
+                    faltando_tl.append('Descrição')
+                if not quem_tl.strip():
+                    faltando_tl.append('Seu nome')
 
-# ── Ações em Acompanhamento na Semana (lista manual) ───────────────
-@st.cache_data(ttl=60)
-def carregar_acompanhamento():
-    resp = supabase.table(TABELA_ACOMP).select("*").execute()
-    dfa = pd.DataFrame(resp.data)
-    if not dfa.empty:
-        dfa['semana_referencia'] = pd.to_datetime(dfa['semana_referencia'], errors='coerce')
-        dfa['criado_em'] = pd.to_datetime(dfa['criado_em'], errors='coerce', utc=True).dt.tz_localize(None)
-    return dfa
-
-st.subheader('🗓️ Ações em Acompanhamento na Semana')
-st.caption('Lista manual, cadastrada semana a semana — independente do status das ações do plano de ação.')
-
-hoje_d = date.today()
-col_sem1, col_sem2 = st.columns([1, 3])
-with col_sem1:
-    dia_ref_semana = st.date_input('Semana de referência', value=hoje_d, key='semana_ref_input')
-segunda_semana = dia_ref_semana - timedelta(days=dia_ref_semana.weekday())
-domingo_semana = segunda_semana + timedelta(days=6)
-with col_sem2:
-    st.markdown(
-        f"<div style='padding-top:28px;color:#555;'>Semana de "
-        f"<b>{segunda_semana.strftime('%d/%m/%Y')}</b> a <b>{domingo_semana.strftime('%d/%m/%Y')}</b></div>",
-        unsafe_allow_html=True
-    )
-
-with st.expander('➕ Adicionar item de acompanhamento'):
-    with st.form('form_acomp', clear_on_submit=True):
-        nova_desc_acomp = st.text_area('O que está sendo acompanhado *')
-        novo_resp_acomp = st.text_input('Responsável (opcional)')
-        quem_criou_acomp = st.text_input('Seu nome *')
-        enviar_acomp = st.form_submit_button('➕ Adicionar')
-
-        if enviar_acomp:
-            if not nova_desc_acomp.strip() or not quem_criou_acomp.strip():
-                st.error('Preencha os campos obrigatórios: descrição e seu nome.')
-            else:
-                supabase.table(TABELA_ACOMP).insert({
-                    'descricao': nova_desc_acomp.strip(),
-                    'responsavel': novo_resp_acomp.strip(),
-                    'semana_referencia': segunda_semana.isoformat(),
-                    'criado_por': quem_criou_acomp.strip(),
-                    'criado_em': datetime.now().isoformat(),
-                }).execute()
-                st.success('Item adicionado!')
-                st.cache_data.clear()
-                st.rerun()
-
-df_acomp = carregar_acompanhamento()
-if not df_acomp.empty:
-    itens_semana = df_acomp[df_acomp['semana_referencia'].dt.date == segunda_semana]
-else:
-    itens_semana = pd.DataFrame()
-
-if len(itens_semana) == 0:
-    st.info('Nenhum item cadastrado para esta semana ainda.')
-else:
-    for _, row in itens_semana.sort_values('criado_em').iterrows():
-        resp_txt = f" — *{row['responsavel']}*" if row.get('responsavel') else ''
-        meta_txt = row['criado_em'].strftime('%d/%m %H:%M') if pd.notna(row['criado_em']) else ''
-        col_txt, col_del = st.columns([8, 1])
-        with col_txt:
-            st.markdown(
-                f"- {row['descricao']}{resp_txt}  \n"
-                f"<span style='font-size:11px;color:#888;'>cadastrado por {row['criado_por']} em {meta_txt}</span>",
-                unsafe_allow_html=True
-            )
-        with col_del:
-            if st.button('🗑️', key=f"del_acomp_{row['id']}"):
-                supabase.table(TABELA_ACOMP).delete().eq('id', row['id']).execute()
-                st.cache_data.clear()
-                st.rerun()
+                if faltando_tl:
+                    st.error('Preencha os campos obrigatórios: ' + ', '.join(faltando_tl))
+                else:
+                    supabase.table(TABELA_TIMELINE).insert({
+                        'data': nova_data_tl.isoformat(),
+                        'titulo': novo_titulo_tl.strip(),
+                        'corpo': novo_corpo_tl.strip(),
+                        'criado_por': quem_tl.strip(),
+                        'criado_em': datetime.now().isoformat(),
+                    }).execute()
+                    st.success('Evento adicionado à timeline!')
+                    st.cache_data.clear()
+                    st.rerun()
 
 st.divider()
 
@@ -309,7 +263,7 @@ with col_f3:
     filtro_tipo = st.selectbox('🏷️ Tipo', tipo_opts)
 
 with col_f4:
-    busca = st.text_input('🔍 Buscar por palavra-chave')
+    busca = st.text_input('🔍 Buscar por palavra-chave', help='Busca em Problema, Plano de Ação e Comentário.')
 
 col_p1, col_p2 = st.columns([1, 2])
 with col_p1:
@@ -343,7 +297,8 @@ if filtro_tipo != 'Todos':
 if busca:
     df_filtrado = df_filtrado[
         df_filtrado['problema_identificado'].str.contains(busca, case=False, na=False) |
-        df_filtrado['plano_de_acao'].str.contains(busca, case=False, na=False)
+        df_filtrado['plano_de_acao'].str.contains(busca, case=False, na=False) |
+        df_filtrado['comentario'].astype(str).str.contains(busca, case=False, na=False)
     ]
 if data_ini is not None:
     df_filtrado = df_filtrado[df_filtrado['prazo'] >= pd.Timestamp(data_ini)]
@@ -353,7 +308,10 @@ if data_fim is not None:
 st.caption(f'Exibindo {len(df_filtrado)} de {len(df)} ações')
 
 with st.expander('📤 Exportar PPT'):
-    st.caption('Gera uma apresentação com capa, resumo (cards + gráfico) e tabela detalhada, usando os filtros aplicados acima.')
+    st.caption(
+        'Gera uma apresentação com capa, resumo (cards + gráfico), tabela detalhada (com último comentário) '
+        'e histórico de alterações, usando os filtros aplicados acima.'
+    )
     if st.button('Gerar apresentação'):
         with st.spinner('Gerando PPT...'):
             partes_filtro = []
@@ -369,8 +327,14 @@ with st.expander('📤 Exportar PPT'):
                 partes_filtro.append(f'Busca: "{busca}"')
             filtros_texto = ' · '.join(partes_filtro) if partes_filtro else 'Todas as ações'
 
+            ids_filtrados = df_filtrado['id'].tolist()
+            hist_para_export = (
+                df_historico[df_historico['acao_id'].isin(ids_filtrados)]
+                if not df_historico.empty else df_historico
+            )
+
             saida = '/tmp/plano_acao_export.pptx'
-            gerar_ppt(None, df_filtrado, filtros_texto, saida)
+            gerar_ppt(None, df_filtrado, filtros_texto, saida, df_historico=hist_para_export)
 
             with open(saida, 'rb') as f:
                 st.download_button(
@@ -450,6 +414,7 @@ st.divider()
 # ── Tabela principal ─────────────────────────────────────────────
 st.subheader('📋 Ações Detalhadas')
 
+
 def colorir_status(val):
     if val == 'Concluído':
         return 'background-color: #E8F5E9; color: #2E7D32'
@@ -459,26 +424,44 @@ def colorir_status(val):
         return 'background-color: #FFF3E0; color: #E65100'
     return ''
 
+
 tabela = df_filtrado[[
     'numero', 'responsavel', 'tipo', 'problema_identificado', 'plano_de_acao',
     'prazo_fmt', 'data_finalizacao_fmt', 'status_exibicao', 'dias_atraso_calc',
-    'atualizado_em_fmt', 'atualizado_por'
+    'atualizado_em_fmt', 'atualizado_por', 'comentario'
 ]].rename(columns={
     'numero': 'Número', 'responsavel': 'Responsável', 'tipo': 'Tipo',
     'problema_identificado': 'Problema', 'plano_de_acao': 'Plano de Ação',
     'prazo_fmt': 'Prazo', 'data_finalizacao_fmt': 'Finalização',
     'status_exibicao': 'Status', 'dias_atraso_calc': 'Dias Atraso',
-    'atualizado_em_fmt': 'Última Atualização', 'atualizado_por': 'Atualizado Por'
+    'atualizado_em_fmt': 'Última Atualização', 'atualizado_por': 'Atualizado Por',
+    'comentario': 'Último Comentário',
 })
 
 styled_table = tabela.style.map(colorir_status, subset=['Status'])
 st.write(styled_table)
+
 import io
 
 buffer = io.BytesIO()
 
 with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
     tabela.to_excel(writer, index=False, sheet_name="Acoes Detalhadas")
+
+    if not df_historico.empty:
+        ids_filtrados = df_filtrado['id'].tolist()
+        hist_export = df_historico[df_historico['acao_id'].isin(ids_filtrados)].sort_values(
+            'alterado_em', ascending=False
+        )
+        hist_export_fmt = hist_export[[
+            'alterado_em', 'alterado_por', 'acao_numero', 'tipo_evento',
+            'status_anterior', 'status_novo', 'comentario'
+        ]].copy()
+        hist_export_fmt['alterado_em'] = hist_export_fmt['alterado_em'].dt.strftime('%d/%m/%Y %H:%M')
+        hist_export_fmt.columns = [
+            'Quando', 'Quem', 'Ação Nº', 'Evento', 'Status Antes', 'Status Depois', 'Comentário'
+        ]
+        hist_export_fmt.to_excel(writer, index=False, sheet_name="Histórico")
 
 st.download_button(
     label="📥 Baixar Excel",
@@ -536,7 +519,20 @@ with st.expander('Abrir formulário de nova ação'):
                     'atualizado_por': criado_por.strip(),
                     'criado_por': criado_por.strip(),
                 }
-                supabase.table(TABELA).insert(novo_registro).execute()
+                resp_insert = supabase.table(TABELA).insert(novo_registro).execute()
+                nova_acao_id = resp_insert.data[0]['id'] if resp_insert.data else None
+
+                registrar_historico(
+                    acao_id=nova_acao_id,
+                    tipo_evento='criacao',
+                    alterado_por=criado_por.strip(),
+                    acao_numero=proximo_numero,
+                    acao_resumo=novo_problema.strip(),
+                    status_anterior=None,
+                    status_novo=novo_status_criacao,
+                    comentario=comentario_criacao,
+                )
+
                 st.success(f'Ação #{proximo_numero} criada com sucesso!')
                 st.cache_data.clear()
                 st.rerun()
@@ -561,6 +557,33 @@ else:
         status_atual = linha['status_exibicao']
         tipo_atual = linha.get('tipo')
 
+        # ── Histórico desta ação ──
+        hist_acao = (
+            df_historico[df_historico['acao_id'] == acao_id].sort_values('alterado_em', ascending=False)
+            if not df_historico.empty else pd.DataFrame()
+        )
+        with st.expander(f"🕓 Histórico desta ação ({len(hist_acao)} registro(s))"):
+            if hist_acao.empty:
+                st.caption('Nenhum histórico registrado ainda para esta ação.')
+            else:
+                for _, h in hist_acao.iterrows():
+                    quando = h['alterado_em'].strftime('%d/%m/%Y %H:%M') if pd.notna(h['alterado_em']) else '—'
+                    if h['tipo_evento'] == 'atualizacao' and h['status_anterior'] and h['status_anterior'] != h['status_novo']:
+                        mudanca = f" · status: {h['status_anterior']} → {h['status_novo']}"
+                    elif h['tipo_evento'] == 'criacao':
+                        mudanca = f" · ação criada (status inicial: {h['status_novo']})"
+                    elif h['tipo_evento'] == 'exclusao':
+                        mudanca = " · ação excluída"
+                    else:
+                        mudanca = ''
+                    st.markdown(
+                        f"<div style='border-left:3px solid #CC0000;padding:4px 10px;margin-bottom:8px;'>"
+                        f"<span style='font-size:11px;color:#888;'>{quando} — <b>{h['alterado_por']}</b>{mudanca}</span><br>"
+                        f"{h['comentario'] if h['comentario'] else '<i>sem comentário</i>'}"
+                        f"</div>",
+                        unsafe_allow_html=True
+                    )
+
         with st.form('form_editar'):
             col1, col2 = st.columns(2)
             with col1:
@@ -578,8 +601,11 @@ else:
 
             novo_comentario = st.text_area(
                 'Comentário / Andamento',
-                value=linha.get('comentario') or '',
-                help='Obrigatório sempre que o status é alterado.'
+                value='',
+                help=(
+                    'Esse comentário fica registrado no histórico desta ação (acima) e nas exportações — '
+                    'não substitui os comentários anteriores. Obrigatório sempre que o status é alterado.'
+                )
             )
 
             enviado = st.form_submit_button('💾 Salvar Atualização')
@@ -598,7 +624,7 @@ else:
                     update_data = {
                         'status': novo_status,
                         'tipo': novo_tipo_edicao,
-                        'comentario': novo_comentario,
+                        'comentario': novo_comentario if novo_comentario.strip() else linha.get('comentario'),
                         'responsavel': novo_responsavel,
                         'atualizado_em': datetime.now().isoformat(),
                         'atualizado_por': quem_atualizou.strip(),
@@ -607,18 +633,66 @@ else:
                         update_data['data_finalizacao'] = nova_data_final.isoformat()
 
                     supabase.table(TABELA).update(update_data).eq('id', acao_id).execute()
+
+                    registrar_historico(
+                        acao_id=acao_id,
+                        tipo_evento='atualizacao',
+                        alterado_por=quem_atualizou.strip(),
+                        acao_numero=linha['numero'],
+                        acao_resumo=str(linha['problema_identificado']),
+                        status_anterior=status_atual,
+                        status_novo=novo_status,
+                        comentario=novo_comentario,
+                    )
+
                     st.success('Ação atualizada com sucesso!')
                     st.cache_data.clear()
                     st.rerun()
 
         with st.expander('🗑️ Excluir esta ação'):
             st.warning(f"Isso vai apagar permanentemente a ação #{linha['numero']} — {linha['responsavel']}. Não tem como desfazer.")
+            quem_exclui = st.text_input('Seu nome (quem está excluindo) *', key=f'quem_exclui_{acao_id}')
             confirmar = st.checkbox('Sim, quero excluir essa ação permanentemente', key=f'confirmar_exclusao_{acao_id}')
             if st.button('🗑️ Excluir definitivamente', disabled=not confirmar):
-                supabase.table(TABELA).delete().eq('id', acao_id).execute()
-                st.success('Ação excluída.')
-                st.cache_data.clear()
-                st.rerun()
+                if not quem_exclui.strip():
+                    st.error('Informe seu nome antes de excluir — fica registrado no histórico.')
+                else:
+                    registrar_historico(
+                        acao_id=None,  # a ação está prestes a ser removida
+                        tipo_evento='exclusao',
+                        alterado_por=quem_exclui.strip(),
+                        acao_numero=linha['numero'],
+                        acao_resumo=str(linha['problema_identificado']),
+                        status_anterior=status_atual,
+                        status_novo=None,
+                        comentario='Ação excluída permanentemente.',
+                    )
+                    supabase.table(TABELA).delete().eq('id', acao_id).execute()
+                    st.success('Ação excluída.')
+                    st.cache_data.clear()
+                    st.rerun()
+
+st.divider()
+
+# ── Histórico geral de alterações ──────────────────────────────────
+st.subheader('📜 Histórico Geral de Alterações')
+st.caption('Quem mexeu, quando e o que mudou em cada ação — inclusive ações já excluídas.')
+
+with st.expander('Ver histórico completo', expanded=False):
+    if df_historico.empty:
+        st.caption('Nenhum histórico registrado ainda.')
+    else:
+        pessoas_hist = ['Todos'] + sorted(df_historico['alterado_por'].dropna().unique().tolist())
+        filtro_pessoa_hist = st.selectbox('Filtrar por pessoa', pessoas_hist, key='filtro_pessoa_hist')
+        dfh_filtrado = df_historico if filtro_pessoa_hist == 'Todos' else df_historico[df_historico['alterado_por'] == filtro_pessoa_hist]
+
+        tabela_hist = dfh_filtrado[[
+            'alterado_em', 'alterado_por', 'acao_numero', 'tipo_evento',
+            'status_anterior', 'status_novo', 'comentario'
+        ]].copy()
+        tabela_hist['alterado_em'] = tabela_hist['alterado_em'].dt.strftime('%d/%m/%Y %H:%M')
+        tabela_hist.columns = ['Quando', 'Quem', 'Ação Nº', 'Evento', 'Status Antes', 'Status Depois', 'Comentário']
+        st.dataframe(tabela_hist, use_container_width=True, hide_index=True)
 
 st.divider()
 
