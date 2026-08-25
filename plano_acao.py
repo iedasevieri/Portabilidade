@@ -69,19 +69,7 @@ def carregar_dados():
     df['data_finalizacao'] = pd.to_datetime(df['data_finalizacao'], errors='coerce')
     df['atualizado_em'] = pd.to_datetime(df['atualizado_em'], errors='coerce', utc=True).dt.tz_localize(None)
 
-    # Status calculado automaticamente a partir das datas (fallback)
-    def calcular_status(row):
-        if pd.notna(row['data_finalizacao']):
-            return 'Concluído'
-        elif pd.notna(row['prazo']) and row['prazo'] < hoje:
-            return 'Atrasado'
-        else:
-            return 'Em andamento'
-
-    df['status_calc'] = df.apply(calcular_status, axis=1)
-
-    # Status "oficial": o que foi definido manualmente tem prioridade;
-    # se nunca foi definido (ou tem grafia diferente), usa o calculado pelas datas
+    # Normaliza o status escolhido manualmente (grafias diferentes viram um valor padrão)
     def normalizar_status(val):
         if pd.isna(val) or not str(val).strip():
             return None
@@ -94,11 +82,20 @@ def carregar_dados():
             return 'Em andamento'
         return None
 
-    if 'status' in df.columns:
-        df['status_exibicao'] = df['status'].apply(normalizar_status)
-        df['status_exibicao'] = df['status_exibicao'].fillna(df['status_calc'])
-    else:
-        df['status_exibicao'] = df['status_calc']
+    # Status "oficial" exibido no app.
+    # Prazo vencido (e não concluída) SEMPRE aparece como "Atrasado", mesmo que o
+    # status escolhido manualmente na última edição tenha ficado como "Em andamento" —
+    # senão uma ação passa a ficar "esquecida" como atrasada sem nunca aparecer assim.
+    # Só quando não está vencida é que o status manual (se existir) é respeitado.
+    def calcular_status_exibicao(row):
+        if pd.notna(row['data_finalizacao']):
+            return 'Concluído'
+        if pd.notna(row['prazo']) and row['prazo'] < hoje:
+            return 'Atrasado'
+        manual = normalizar_status(row.get('status')) if 'status' in row else None
+        return manual if manual else 'Em andamento'
+
+    df['status_exibicao'] = df.apply(calcular_status_exibicao, axis=1)
 
     # Atraso de prazo (independente do status manual escolhido)
     def calcular_atraso(row):
