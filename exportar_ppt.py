@@ -13,7 +13,7 @@ COR_CINZA = RGBColor(127, 127, 127)
 COR_CINZA_CLARO = RGBColor(230, 230, 230)
 
 
-def gerar_ppt(template_path, df_filtrado, filtros_texto, saida_path):
+def gerar_ppt(template_path, df_filtrado, filtros_texto, saida_path, df_historico=None):
 
     prs = Presentation()
 
@@ -122,7 +122,7 @@ def gerar_ppt(template_path, df_filtrado, filtros_texto, saida_path):
         tf.text = f"{valor}\n{titulo_card}"
 
     # ==========================
-    # TABELAS POR STATUS
+    # TABELAS POR STATUS (agora com coluna de Comentário)
     # ==========================
 
     status_ordem = [
@@ -179,19 +179,20 @@ def gerar_ppt(template_path, df_filtrado, filtros_texto, saida_path):
 
             tabela = slide.shapes.add_table(
                 len(df_pagina) + 1,
-                6,
+                7,
                 left_centralizado,
                 Inches(0.8),
                 largura_tabela,
                 Inches(4.5)
             ).table
 
-            tabela.columns[0].width = Inches(0.7)
-            tabela.columns[1].width = Inches(1.3)
-            tabela.columns[2].width = Inches(2.2)
-            tabela.columns[3].width = Inches(2.2)
-            tabela.columns[4].width = Inches(1.1)
-            tabela.columns[5].width = Inches(1.5)
+            tabela.columns[0].width = Inches(0.6)
+            tabela.columns[1].width = Inches(1.0)
+            tabela.columns[2].width = Inches(1.7)
+            tabela.columns[3].width = Inches(1.7)
+            tabela.columns[4].width = Inches(0.9)
+            tabela.columns[5].width = Inches(1.3)
+            tabela.columns[6].width = Inches(2.3)
 
             headers = [
                 "Número",
@@ -199,7 +200,8 @@ def gerar_ppt(template_path, df_filtrado, filtros_texto, saida_path):
                 "Problema",
                 "Plano de Ação",
                 "Status",
-                "Última Atualização"
+                "Última Atualização",
+                "Último Comentário",
             ]
 
             for c, h in enumerate(headers):
@@ -229,13 +231,16 @@ def gerar_ppt(template_path, df_filtrado, filtros_texto, saida_path):
                 start=1
             ):
 
+                comentario_val = row["comentario"] if "comentario" in row and row["comentario"] else ""
+
                 valores = [
                     str(row["numero"]),
                     str(row["tipo"]),
-                    str(row["problema_identificado"])[:50],
-                    str(row["plano_de_acao"])[:50],
+                    str(row["problema_identificado"])[:45],
+                    str(row["plano_de_acao"])[:45],
                     str(row["status_exibicao"]),
-                    str(row["atualizado_em_fmt"])
+                    str(row["atualizado_em_fmt"]),
+                    str(comentario_val)[:80],
                 ]
 
                 for c, valor in enumerate(valores):
@@ -249,7 +254,90 @@ def gerar_ppt(template_path, df_filtrado, filtros_texto, saida_path):
 
                     for p in cell.text_frame.paragraphs:
                         for run in p.runs:
-                            run.font.size = Pt(10)
+                            run.font.size = Pt(9)
+                            run.font.name = "AMX"
+
+    # ==========================
+    # HISTÓRICO DE ALTERAÇÕES (apêndice — quem mudou o quê e quando)
+    # ==========================
+
+    if df_historico is not None and len(df_historico) > 0:
+
+        dfh = df_historico.sort_values("alterado_em", ascending=False)
+
+        linhas_por_slide_hist = 8
+        paginas_hist = math.ceil(len(dfh) / linhas_por_slide_hist)
+
+        for pagina in range(paginas_hist):
+
+            slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+            titulo = slide.shapes.add_textbox(
+                Inches(0.3), Inches(0.2), Inches(6), Inches(0.4)
+            )
+            titulo.text_frame.text = f"Histórico de Alterações ({pagina+1}/{paginas_hist})"
+
+            for p in titulo.text_frame.paragraphs:
+                for run in p.runs:
+                    run.font.name = "AMX"
+                    run.font.size = Pt(18)
+                    run.font.bold = True
+
+            inicio = pagina * linhas_por_slide_hist
+            fim = inicio + linhas_por_slide_hist
+            dfh_pagina = dfh.iloc[inicio:fim]
+
+            largura_tabela = Inches(9.5)
+            largura_slide = prs.slide_width
+            left_centralizado = int((largura_slide - largura_tabela) / 2)
+
+            tabela = slide.shapes.add_table(
+                len(dfh_pagina) + 1,
+                5,
+                left_centralizado,
+                Inches(0.8),
+                largura_tabela,
+                Inches(4.5)
+            ).table
+
+            tabela.columns[0].width = Inches(1.2)
+            tabela.columns[1].width = Inches(1.2)
+            tabela.columns[2].width = Inches(0.9)
+            tabela.columns[3].width = Inches(1.8)
+            tabela.columns[4].width = Inches(4.4)
+
+            headers_hist = ["Quando", "Quem", "Ação Nº", "Evento", "Comentário"]
+
+            for c, h in enumerate(headers_hist):
+                cell = tabela.cell(0, c)
+                cell.text = h
+                cell.fill.solid()
+                cell.fill.fore_color.rgb = COR_VERMELHO
+                for p in cell.text_frame.paragraphs:
+                    p.alignment = PP_ALIGN.CENTER
+                    for run in p.runs:
+                        run.font.bold = True
+                        run.font.size = Pt(10)
+                        run.font.name = "AMX"
+                        run.font.color.rgb = RGBColor(255, 255, 255)
+
+            for r, (_, row) in enumerate(dfh_pagina.iterrows(), start=1):
+                quando = row["alterado_em"].strftime("%d/%m/%Y %H:%M") if row["alterado_em"] is not None else "—"
+                valores = [
+                    quando,
+                    str(row.get("alterado_por") or ""),
+                    str(row.get("acao_numero") or ""),
+                    str(row.get("tipo_evento") or ""),
+                    str(row.get("comentario") or "")[:120],
+                ]
+                for c, valor in enumerate(valores):
+                    cell = tabela.cell(r, c)
+                    cell.text = valor
+                    cell.fill.solid()
+                    cell.fill.fore_color.rgb = COR_CINZA_CLARO
+                    for p in cell.text_frame.paragraphs:
+                        for run in p.runs:
+                            run.font.size = Pt(9)
                             run.font.name = "AMX"
 
     prs.save(saida_path)
