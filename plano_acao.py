@@ -102,11 +102,14 @@ def carregar_dados():
     # senão uma ação passa a ficar "esquecida" como atrasada sem nunca aparecer assim.
     # Só quando não está vencida é que o status manual (se existir) é respeitado.
     def calcular_status_exibicao(row):
-        if pd.notna(row['data_finalizacao']):
+        manual = normalizar_status(row.get('status')) if 'status' in row else None
+        # Concluído (manual OU com data de finalização) sempre vence — nunca "reabre"
+        # uma ação que a pessoa já marcou como concluída, mesmo que ela tenha esquecido
+        # de preencher a Data de Finalização.
+        if pd.notna(row['data_finalizacao']) or manual == 'Concluído':
             return 'Concluído'
         if pd.notna(row['prazo']) and row['prazo'] < hoje:
             return 'Atrasado'
-        manual = normalizar_status(row.get('status')) if 'status' in row else None
         return manual if manual else 'Em andamento'
 
     df['status_exibicao'] = df.apply(calcular_status_exibicao, axis=1)
