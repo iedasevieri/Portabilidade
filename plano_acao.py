@@ -265,16 +265,16 @@ st.subheader('🔍 Filtros')
 col_f1, col_f2, col_f3, col_f4 = st.columns(4)
 
 with col_f1:
-    responsaveis = ['Todos'] + sorted(df['responsavel'].dropna().unique().tolist())
-    filtro_resp = st.selectbox('👤 Responsável', responsaveis)
+    responsaveis = sorted(df['responsavel'].dropna().unique().tolist())
+    filtro_resp = st.multiselect('👤 Responsável', responsaveis, help='Vazio = todos. Pode escolher mais de um.')
 
 with col_f2:
-    status_opts = ['Todos'] + sorted(df['status_exibicao'].dropna().unique().tolist())
-    filtro_status = st.selectbox('📌 Status', status_opts)
+    status_opts = sorted(df['status_exibicao'].dropna().unique().tolist())
+    filtro_status = st.multiselect('📌 Status', status_opts, help='Vazio = todos. Pode escolher mais de um.')
 
 with col_f3:
-    tipo_opts = ['Todos'] + sorted(df['tipo'].dropna().unique().tolist())
-    filtro_tipo = st.selectbox('🏷️ Tipo', tipo_opts)
+    tipo_opts = sorted(df['tipo'].dropna().unique().tolist())
+    filtro_tipo = st.multiselect('🏷️ Tipo', tipo_opts, help='Vazio = todos. Pode escolher mais de um.')
 
 with col_f4:
     busca = st.text_input('🔍 Buscar por palavra-chave', help='Busca em Problema, Plano de Ação e Comentário.')
@@ -302,12 +302,12 @@ elif filtro_periodo == 'Ano atual':
     data_ini = pd.Timestamp(date(date.today().year, 1, 1))
 
 df_filtrado = df.copy()
-if filtro_resp != 'Todos':
-    df_filtrado = df_filtrado[df_filtrado['responsavel'] == filtro_resp]
-if filtro_status != 'Todos':
-    df_filtrado = df_filtrado[df_filtrado['status_exibicao'] == filtro_status]
-if filtro_tipo != 'Todos':
-    df_filtrado = df_filtrado[df_filtrado['tipo'] == filtro_tipo]
+if filtro_resp:
+    df_filtrado = df_filtrado[df_filtrado['responsavel'].isin(filtro_resp)]
+if filtro_status:
+    df_filtrado = df_filtrado[df_filtrado['status_exibicao'].isin(filtro_status)]
+if filtro_tipo:
+    df_filtrado = df_filtrado[df_filtrado['tipo'].isin(filtro_tipo)]
 if busca:
     df_filtrado = df_filtrado[
         df_filtrado['problema_identificado'].str.contains(busca, case=False, na=False) |
@@ -329,12 +329,12 @@ with st.expander('📤 Exportar PPT'):
     if st.button('Gerar apresentação'):
         with st.spinner('Gerando PPT...'):
             partes_filtro = []
-            if filtro_resp != 'Todos':
-                partes_filtro.append(f'Responsável: {filtro_resp}')
-            if filtro_status != 'Todos':
-                partes_filtro.append(f'Status: {filtro_status}')
-            if filtro_tipo != 'Todos':
-                partes_filtro.append(f'Tipo: {filtro_tipo}')
+            if filtro_resp:
+                partes_filtro.append(f'Responsável: {", ".join(filtro_resp)}')
+            if filtro_status:
+                partes_filtro.append(f'Status: {", ".join(filtro_status)}')
+            if filtro_tipo:
+                partes_filtro.append(f'Tipo: {", ".join(filtro_tipo)}')
             if filtro_periodo != 'Todos':
                 partes_filtro.append(f'Período: {filtro_periodo}')
             if busca:
