@@ -607,6 +607,12 @@ else:
                 novo_tipo_edicao = st.selectbox('Tipo', TIPO_OPCOES, index=indice_tipo)
                 novo_responsavel = st.text_input('Responsável', value=linha.get('responsavel') or '')
             with col2:
+                novo_prazo = st.date_input(
+                    'Prazo',
+                    value=linha['prazo'].date() if pd.notna(linha['prazo']) else date.today(),
+                    help='Se o prazo combinado mudou (ex.: projeto adiado/renegociado), atualize aqui — '
+                         'é isso que tira a ação do status "Atrasado" automático sem precisar concluí-la.'
+                )
                 nova_data_final = st.date_input(
                     'Data de Finalização (deixe vazio se ainda não concluído)',
                     value=linha['data_finalizacao'].date() if pd.notna(linha['data_finalizacao']) else None
@@ -640,6 +646,7 @@ else:
                         'tipo': novo_tipo_edicao,
                         'comentario': novo_comentario if novo_comentario.strip() else linha.get('comentario'),
                         'responsavel': novo_responsavel,
+                        'prazo': novo_prazo.isoformat(),
                         'atualizado_em': datetime.now().isoformat(),
                         'atualizado_por': quem_atualizou.strip(),
                     }
@@ -647,6 +654,12 @@ else:
                         update_data['data_finalizacao'] = nova_data_final.isoformat()
 
                     supabase.table(TABELA).update(update_data).eq('id', acao_id).execute()
+
+                    prazo_atual_val = linha['prazo'].date() if pd.notna(linha['prazo']) else None
+                    nota_prazo = ''
+                    if novo_prazo != prazo_atual_val:
+                        de_txt = prazo_atual_val.strftime('%d/%m/%Y') if prazo_atual_val else '—'
+                        nota_prazo = f"[Prazo alterado de {de_txt} para {novo_prazo.strftime('%d/%m/%Y')}] "
 
                     registrar_historico(
                         acao_id=acao_id,
@@ -656,7 +669,7 @@ else:
                         acao_resumo=str(linha['problema_identificado']),
                         status_anterior=status_atual,
                         status_novo=novo_status,
-                        comentario=novo_comentario,
+                        comentario=(nota_prazo + novo_comentario) if nota_prazo else novo_comentario,
                     )
 
                     st.success('Ação atualizada com sucesso!')
