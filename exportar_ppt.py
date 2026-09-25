@@ -179,23 +179,25 @@ def gerar_ppt(template_path, df_filtrado, filtros_texto, saida_path, df_historic
 
             tabela = slide.shapes.add_table(
                 len(df_pagina) + 1,
-                7,
+                8,
                 left_centralizado,
                 Inches(0.8),
                 largura_tabela,
                 Inches(4.5)
             ).table
 
-            tabela.columns[0].width = Inches(0.6)
+            tabela.columns[0].width = Inches(0.5)
             tabela.columns[1].width = Inches(1.0)
-            tabela.columns[2].width = Inches(1.7)
-            tabela.columns[3].width = Inches(1.7)
-            tabela.columns[4].width = Inches(0.9)
-            tabela.columns[5].width = Inches(1.3)
-            tabela.columns[6].width = Inches(2.3)
+            tabela.columns[2].width = Inches(0.9)
+            tabela.columns[3].width = Inches(1.5)
+            tabela.columns[4].width = Inches(1.5)
+            tabela.columns[5].width = Inches(0.8)
+            tabela.columns[6].width = Inches(1.1)
+            tabela.columns[7].width = Inches(2.2)
 
             headers = [
                 "Número",
+                "Responsável",
                 "Tipo",
                 "Problema",
                 "Plano de Ação",
@@ -235,6 +237,7 @@ def gerar_ppt(template_path, df_filtrado, filtros_texto, saida_path, df_historic
 
                 valores = [
                     str(row["numero"]),
+                    str(row["responsavel"]),
                     str(row["tipo"]),
                     str(row["problema_identificado"]),
                     str(row["plano_de_acao"]),
