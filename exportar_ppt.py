@@ -131,7 +131,7 @@ def gerar_ppt(template_path, df_filtrado, filtros_texto, saida_path, df_historic
         "Concluído"
     ]
 
-    linhas_por_slide = 5
+    linhas_por_slide = 4
 
     for status in status_ordem:
 
@@ -236,11 +236,11 @@ def gerar_ppt(template_path, df_filtrado, filtros_texto, saida_path, df_historic
                 valores = [
                     str(row["numero"]),
                     str(row["tipo"]),
-                    str(row["problema_identificado"])[:45],
-                    str(row["plano_de_acao"])[:45],
+                    str(row["problema_identificado"]),
+                    str(row["plano_de_acao"]),
                     str(row["status_exibicao"]),
                     str(row["atualizado_em_fmt"]),
-                    str(comentario_val)[:80],
+                    str(comentario_val),
                 ]
 
                 for c, valor in enumerate(valores):
@@ -248,6 +248,7 @@ def gerar_ppt(template_path, df_filtrado, filtros_texto, saida_path, df_historic
                     cell = tabela.cell(r, c)
 
                     cell.text = valor
+                    cell.text_frame.word_wrap = True
 
                     cell.fill.solid()
                     cell.fill.fore_color.rgb = COR_CINZA_CLARO
@@ -265,7 +266,7 @@ def gerar_ppt(template_path, df_filtrado, filtros_texto, saida_path, df_historic
 
         dfh = df_historico.sort_values("alterado_em", ascending=False)
 
-        linhas_por_slide_hist = 8
+        linhas_por_slide_hist = 6
         paginas_hist = math.ceil(len(dfh) / linhas_por_slide_hist)
 
         for pagina in range(paginas_hist):
@@ -328,11 +329,12 @@ def gerar_ppt(template_path, df_filtrado, filtros_texto, saida_path, df_historic
                     str(row.get("alterado_por") or ""),
                     str(row.get("acao_numero") or ""),
                     str(row.get("tipo_evento") or ""),
-                    str(row.get("comentario") or "")[:120],
+                    str(row.get("comentario") or ""),
                 ]
                 for c, valor in enumerate(valores):
                     cell = tabela.cell(r, c)
                     cell.text = valor
+                    cell.text_frame.word_wrap = True
                     cell.fill.solid()
                     cell.fill.fore_color.rgb = COR_CINZA_CLARO
                     for p in cell.text_frame.paragraphs:
