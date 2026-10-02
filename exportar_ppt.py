@@ -21,14 +21,13 @@ from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 # ── Paleta e fonte ──────────────────────────────────────────────────
 FONTE = "AMX"
 
-COR_VERMELHO = RGBColor(192, 0, 0)          # vermelho "marca" (capa e cards)
-COR_VERMELHO_HEADER = RGBColor(255, 0, 0)   # vermelho puro (R255) dos cabeçalhos de tabela
+COR_VERMELHO = RGBColor(192, 0, 0)          # vermelho "marca" (capa, cards e cabeçalhos de tabela)
+COR_VERMELHO_HEADER = COR_VERMELHO          # cabeçalhos de tabela: #C00000 (RGB 192,0,0)
 COR_PRETO = RGBColor(0, 0, 0)
 COR_BRANCO = RGBColor(255, 255, 255)
 COR_VERDE = RGBColor(112, 173, 71)
 COR_LARANJA = RGBColor(244, 177, 131)
 COR_CINZA = RGBColor(127, 127, 127)
-COR_CINZA_CLARO = RGBColor(230, 230, 230)
 
 # ── Medidas usadas para as tabelas nunca cortarem texto ─────────────
 ALTURA_TOPO_TABELA = 0.8     # polegadas: onde a tabela começa (abaixo do título do slide)
@@ -93,8 +92,11 @@ def _formatar_celula(cell, texto, tamanho_pt, cor_fonte, cor_fundo, negrito=Fals
     cell.margin_right = MARGEM_CELULA
     cell.margin_top = Inches(0.03)
     cell.margin_bottom = Inches(0.03)
-    cell.fill.solid()
-    cell.fill.fore_color.rgb = cor_fundo
+    if cor_fundo is None:
+        cell.fill.background()  # sem cor de fundo (transparente)
+    else:
+        cell.fill.solid()
+        cell.fill.fore_color.rgb = cor_fundo
     _aplicar_fonte(cell.text_frame, tamanho_pt, cor_fonte, negrito, alinhamento)
 
 
@@ -167,12 +169,15 @@ def _adicionar_slide_tabela(prs, titulo_texto, colunas, linhas_pagina,
             COR_BRANCO, COR_VERMELHO_HEADER, negrito=True, alinhamento=PP_ALIGN.CENTER,
         )
 
+    # Linhas de dados sem cor de fundo — só o cabeçalho vermelho funciona como
+    # "risco" dividindo o título da tabela do conteúdo; sem fundo cinza nas
+    # linhas pra não parecer uma tabela cheia.
     for r, (linha, altura) in enumerate(linhas_pagina, start=1):
         tabela.rows[r].height = Inches(altura)
         for c, col in enumerate(colunas):
             _formatar_celula(
                 tabela.cell(r, c), linha.get(col["chave"]), tamanho_pt_body,
-                COR_PRETO, COR_CINZA_CLARO,
+                COR_PRETO, None,
             )
 
     return slide
